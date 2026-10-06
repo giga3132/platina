@@ -1,0 +1,22 @@
+# Web API
+fastapi
+uvicorn[standard]
+python-multipart
+httpx            # FastAPI TestClient
+
+# Expected-accent engine
+pyopenjtalk
+fugashi
+unidic           # then run once: python -m unidic download  (full UniDic 3.1, ~770 MB)
+pyyaml
+
+# Audio: alignment, pitch, accent detection, speech recognition
+numpy
+torch
+transformers
+praat-parselmouth
+silero-vad
+scikit-learn==1.9.1  # must match the version that trained app/accent/detector_model.joblib
+joblib
+
+pytest

@@ -1,0 +1,9 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+frontend/dist/
+# Personal NHK-checked accent overrides (not redistributable)
+backend/data/*.sqlite

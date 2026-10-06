@@ -1,20 +1,77 @@
-<!DOCTYPE html>
-<html lang="jp">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="style.css">
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Platina</title>
-</head>
-<body>
-    <h1>プラチナ</h1>
-    <p>このアプリでは、文章の発音を調べることができます。</p>
-    <p>下に入力することでピッチアクセントが表示されます。</p>
-    <form id="text-form">
-        <textarea id="text-input" rows="4" cols="50" placeholder="ここに文章を入力してください"></textarea><br>
-        <button type="submit">発音を調べる</button>
-    </form>
-    <div id="result"></div>
-    <script src="app.js"></script>
-</body>
+  </head>
+  <body>
+    <header class="top">
+      <h1>プラチナ <span>Platina</span></h1>
+      <p class="tagline">Japanese pitch-accent coach</p>
+      <nav role="tablist">
+        <button role="tab" data-tab="speak" aria-selected="true">Speak</button>
+        <button role="tab" data-tab="type" aria-selected="false">Type</button>
+        <button role="tab" data-tab="nhk" aria-selected="false">My NHK accents</button>
+      </nav>
+    </header>
+
+    <main>
+      <div class="content">
+        <section id="tab-speak" class="tab">
+          <div class="controls">
+            <button id="record" class="record" type="button">● Record</button>
+            <span id="timer" class="muted"></span>
+            <label class="upload secondary">Upload audio<input id="upload" type="file" accept="audio/*" hidden /></label>
+          </div>
+          <details class="reading">
+            <summary>Reading a known text? Paste it here (optional, more reliable than transcription)</summary>
+            <textarea id="reading" rows="3" lang="ja" placeholder="例：音を聞いた。"></textarea>
+          </details>
+          <p id="speak-status" class="muted" aria-live="polite"></p>
+          <div id="summary"></div>
+          <div id="results"></div>
+        </section>
+
+        <section id="tab-type" class="tab" hidden>
+          <form id="type-form">
+            <textarea id="type-input" rows="3" lang="ja" placeholder="ここに文章を入力してください"></textarea>
+            <button type="submit">Show accents</button>
+          </form>
+          <div id="type-results"></div>
+        </section>
+
+        <section id="tab-nhk" class="tab" hidden>
+          <p class="muted">
+            Accents you checked in the NHK 日本語発音アクセント新辞典 override every other source.
+            Enter the dictionary form and its accent number(s); conjugated forms and phrases follow automatically.
+          </p>
+          <form id="nhk-form" class="form-grid">
+            <label>Dictionary form <input name="lemma" lang="ja" required placeholder="聞く" /></label>
+            <label>Reading <input name="reading" lang="ja" required placeholder="きく" /></label>
+            <label>Accent number(s) <input name="accents" required placeholder="0  or  0,2" /></label>
+            <label>Note <input name="note" placeholder="optional" /></label>
+            <button type="submit">Save</button>
+          </form>
+          <p id="nhk-status" class="muted" aria-live="polite"></p>
+          <h2>Words to check</h2>
+          <p class="muted">Words from your recordings whose accent the dictionaries disagree on.</p>
+          <ul id="to-check" class="to-check"></ul>
+          <h2>Saved</h2>
+          <table id="nhk-list" class="words"></table>
+        </section>
+
+        <p class="legend-help muted">
+          <span class="notation"><span class="mora high">ト</span><span class="drop">＼</span></span> pitch drops after this mora ·
+          <span class="notation"><span class="flat">━</span></span> stays high to the end (flat / 平板) ·
+          <span class="sample s-error">red</span> = your accent differs ·
+          <span class="sample s-unverified">grey</span> = dictionary unsure, not counted
+        </p>
+      </div>
+
+      <aside id="detail" class="detail" hidden></aside>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

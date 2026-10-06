@@ -1,0 +1,61 @@
+# Gold set for the expected-accent engine.
+#
+# notation: ＼ after the accent nucleus, ━ at the end of a heiban phrase,
+#           one space between accent phrases. を/は/へ written as pronounced.
+# verified: true  = checked against the NHK 日本語発音アクセント新辞典
+#           false = standard Tokyo accent from general knowledge; please check
+#                   in the NHK app and flip to true (or fix the entry)
+# known_issue: the engine is known to get this wrong; the test is xfail and
+#              starts failing (strict) once it is fixed, so remove the key then.
+
+- text: 音を聞いた。
+  expected: オト＼オ キイタ━
+  verified: true
+  note: user example; 聞く[0] + た stays heiban (UniDic/OpenJTalk say F2@1 → odaka)
+
+# 助詞 after each accent type
+- {text: 箸を使う。, expected: ハ＼シオ ツカウ━, verified: false, note: 頭高 + を}
+- {text: 橋を渡る。, expected: ハシ＼オ ワタル━, verified: false, note: 尾高 + を}
+- {text: 端を歩く。, expected: ハシオ━ アル＼ク, verified: false, note: 平板 + を}
+- {text: 先生が来た。, expected: センセ＼イガ キ＼タ, verified: false, note: 中高 + が}
+- {text: 雨が降る。, expected: ア＼メガ フ＼ル, verified: false}
+- {text: 飴を食べる。, expected: アメオ━ タベ＼ル, verified: false}
+- {text: 花が咲いた。, expected: ハナ＼ガ サイタ━, verified: false, note: 尾高 + が; heiban verb + た}
+- {text: 鼻が高い。, expected: ハナガ━ タカ＼イ, verified: false}
+- {text: 天気がいい。, expected: テ＼ンキガ イ＼イ, verified: false}
+
+# conjugation: た / だ / ます
+- {text: 本を読みます。, expected: ホ＼ンオ ヨミマ＼ス, verified: false}
+- {text: 本を読んだ。, expected: ホ＼ンオ ヨ＼ンダ, verified: false}
+- {text: 水を飲んだ。, expected: ミズオ━ ノ＼ンダ, verified: false}
+- {text: 学校に行きます。, expected: ガッコウニ━ イキマ＼ス, verified: false}
+- {text: 友達と遊んだ。, expected: トモダチト━ アソンダ━, verified: false}
+- {text: 電話をかけた。, expected: デンワオ━ カ＼ケタ, verified: false, note: "かける[2] → カ＼ケタ (aModType M4@1)"}
+- {text: 食べました。, expected: タベマ＼シタ, verified: false}
+- {text: 箸で食べます。, expected: ハ＼シデ タベマ＼ス, verified: false}
+- {text: 書いた手紙。, expected: カ＼イタ テガミ━, verified: false}
+
+# volitional / polite
+- {text: 会いましょう。, expected: アイマショ＼ウ, verified: false}
+- {text: 飴でしょう。, expected: アメデショ＼ウ, verified: false}
+- {text: 雨でしょう。, expected: ア＼メデショウ, verified: false}
+- {text: 行こう。, expected: イコ＼ウ, verified: false}
+- {text: 行きません。, expected: イキマセ＼ン, verified: false}
+
+# ない forms: flat after heiban verbs only in the plain form
+- {text: 行かない。, expected: イカナイ━, verified: false}
+- {text: 行かなければ。, expected: イカナ＼ケレバ, verified: false}
+- {text: 行かなかった。, expected: イカナ＼カッタ, verified: false}
+- {text: 買わなくては。, expected: カワナ＼クテワ, verified: false, note: also what the JSUT speaker says}
+- {text: 書かない。, expected: カカ＼ナイ, verified: false}
+- {text: 食べなかった。, expected: タベ＼ナカッタ, verified: false}
+
+# modifiers
+- {text: 大きい犬。, expected: オオキ＼イ イヌ＼, verified: false}
+- {text: 静かな部屋。, expected: シ＼ズカナ ヘヤ＼, verified: false}
+
+# known problems
+- text: 日本語を話す。
+  expected: ニホンゴオ━ ハナ＼ス
+  verified: false
+  known_issue: UniDic splits 日本+語 and reads 日本 as ニッポン (flagged uncertain)
