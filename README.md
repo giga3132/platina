@@ -111,23 +111,28 @@ Accuracy on *your* voice is only known once there are labelled recordings of it:
 Clips go to `backend/data/recordings/`, labels to `backend/data/labels.sqlite` (both gitignored).
 `tools/build_cache.py user` turns them into an evaluation set (held out by session) and training data.
 
-## Making it match NHK
+## Making it match NHK (optional)
 
-The NHK 日本語発音アクセント新辞典 can't be bundled, so you supply it yourself:
+Platina works without NHK: expected accents come from UniDic and OpenJTalk. Where you know the NHK
+日本語発音アクセント新辞典 accent of a word, you can enter it, and it then **replaces the dictionary
+accent for that word everywhere**: in conjugated forms, in phrases, and in lessons you re-analyze. Grey
+"check the dictionary" words become normal words that can be marked right or wrong. Phrases made only of
+such words are labelled **NHK**. If you list several accents, all of them count as correct, and the
+first one is the one Platina plays and shows.
 
-- **My NHK accents** tab: for a word marked grey, or listed under *Words to check*, look it up
-  in the NHK app and enter its accent number(s). The override is stored per dictionary form, so
-  conjugated forms and phrases follow automatically. It is saved in `backend/data/overrides.sqlite`,
-  which git ignores.
-- **From an Anki deck**: if you already copy NHK accents into Anki (front: the word, e.g.
-  `せんせい【先生】`; back: `センセ↘イ`, `アンキ＝` or `ヨソー━`, one pronunciation per line),
-  export it as *Notes in Plain Text* and run
-  `cd backend && ../.venv/bin/python -m tools.import_anki path/to/deck.txt`. Single words become
-  overrides; overrides you entered in the app are kept. Re-run it after adding cards. `--check`
-  lists compounds (美術館, 冷蔵庫) where the engine's rules disagree with your cards.
-- **Type** tab → *Save as NHK-checked test case*: adds a sentence to
-  `backend/tests/gold/sentences.yaml`. Entries with `verified: false` were filled in from general
-  knowledge and still need checking against NHK.
+The dictionary can't be bundled, so these accents stay on your machine (`backend/data/overrides.sqlite`,
+ignored by git). There are two ways to add them:
+
+- **My NHK accents** tab: look up a grey word, or one under *Words to check*, and enter its accent
+  number(s) (0 = heiban, n = drop after mora n).
+- **From an Anki deck**: export a deck of NHK accents as *Notes in Plain Text* (front `せんせい【先生】`,
+  back `センセ↘イ`, `アンキ＝` or `ヨソー━`, one per line) and run
+  `cd backend && ../.venv/bin/python -m tools.import_anki deck.txt`. Re-run it after adding cards.
+  Accents entered in the app are kept. `--check` lists compounds (美術館, 冷蔵庫) where the rules
+  disagree with your cards.
+
+For development: **Type** tab → *Save as NHK-checked test case* adds a sentence to
+`backend/tests/gold/sentences.yaml`. Entries marked `verified: false` still need checking against NHK.
 
 ## Tutor voice
 
