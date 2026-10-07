@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .kana import special_moras
 from .sources import Morph
 
 # Rule corrections, each backed by an NHK-checked gold sentence.
@@ -161,6 +162,11 @@ def combine(phrase: list[Morph], base: list[int | None]) -> PhraseAccent:
     if base[0] is None and not phrase[0].is_function_word:
         known = False
     n1 = len(phrase[0].moras)
+    starts, pos = set(), 0
+    for m in phrase:
+        starts.add(pos)
+        pos += len(m.moras)
+    special = special_moras([mo for m in phrase for mo in m.moras], starts)
     for i in range(1, len(phrase)):
         node, prev = phrase[i], phrase[i - 1]
         m2 = base[i]
@@ -215,6 +221,11 @@ def combine(phrase: list[Morph], base: list[int | None]) -> PhraseAccent:
                 top = top if flat_or_last else n1 + m2
             case _:
                 known = False
+        if rule.startswith("C") and 0 < top <= len(special) and special[top - 1]:
+            # A compound's nucleus never falls on ー/ン/ッ or a diphthong's
+            # second half; it moves back one mora (NHK: レイゾ＼ーコ,
+            # ヒコ＼ーキ, イデ＼ンシ, ブタ＼イゲキ).
+            top -= 1
         if top == 0 and _is_nai_stem_form(node):
             # Not in UniDic/OpenJTalk: after a heiban verb, ない is flat only in
             # its plain form; なく(て) / なけれ(ば) / なかっ(た) fall after な:

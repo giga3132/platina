@@ -119,6 +119,12 @@ The NHK 日本語発音アクセント新辞典 can't be bundled, so you supply 
   in the NHK app and enter its accent number(s). The override is stored per dictionary form, so
   conjugated forms and phrases follow automatically. It is saved in `backend/data/overrides.sqlite`,
   which git ignores.
+- **From an Anki deck**: if you already copy NHK accents into Anki (front: the word, e.g.
+  `せんせい【先生】`; back: `センセ↘イ`, `アンキ＝` or `ヨソー━`, one pronunciation per line),
+  export it as *Notes in Plain Text* and run
+  `cd backend && ../.venv/bin/python -m tools.import_anki path/to/deck.txt`. Single words become
+  overrides; overrides you entered in the app are kept. Re-run it after adding cards. `--check`
+  lists compounds (美術館, 冷蔵庫) where the engine's rules disagree with your cards.
 - **Type** tab → *Save as NHK-checked test case*: adds a sentence to
   `backend/tests/gold/sentences.yaml`. Entries with `verified: false` were filled in from general
   knowledge and still need checking against NHK.

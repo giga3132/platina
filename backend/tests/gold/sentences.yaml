@@ -54,6 +54,12 @@
 - {text: 大きい犬。, expected: オオキ＼イ イヌ＼, verified: false}
 - {text: 静かな部屋。, expected: シ＼ズカナ ヘヤ＼, verified: false}
 
+# compound nucleus never on a special mora (ー ン ッ, diphthong tail)
+- {text: 飛行機。, expected: ヒコ＼ウキ, verified: true}
+- {text: 冷蔵庫。, expected: レイゾ＼ウコ, verified: true}
+- {text: 遺伝子。, expected: イデ＼ンシ, verified: true}
+- {text: 授業料。, expected: ジュギョ＼ウリョウ, verified: true}
+
 # known problems
 - text: 日本語を話す。
   expected: ニホンゴオ━ ハナ＼ス

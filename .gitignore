@@ -12,3 +12,5 @@ backend/data/recordings/
 backend/data/review.json
 # Recorded lessons (your voice)
 backend/data/lessons/
+# Personal Anki export with NHK accents (not redistributable)
+単語の発音.txt
