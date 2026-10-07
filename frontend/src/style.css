@@ -39,6 +39,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   background: var(--surface-0);
@@ -87,15 +88,29 @@ textarea, input {
 .top h1 { margin: 0; font-size: 1.6rem; }
 .top h1 span { font-weight: 400; color: var(--text-secondary); font-size: 1rem; margin-left: 0.4em; }
 .tagline { margin: 0.2rem 0 1rem; color: var(--text-secondary); }
-nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
-nav button {
-  background: none;
+/* two areas: "My lessons" first, the Workshop (one-off recordings, experiments) after */
+nav { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 2.5rem; border-bottom: 1px solid var(--border); }
+.nav-group { display: flex; flex-direction: column; gap: 0.1rem; }
+.nav-label { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.nav-hint { text-transform: none; letter-spacing: 0; }
+.nav-group ul { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0; }
+nav a {
+  display: inline-block;
+  padding: 0.45em 1em;
   color: var(--text-secondary);
-  border: none;
+  text-decoration: none;
   border-bottom: 2px solid transparent;
-  border-radius: 0;
 }
-nav button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--accent); }
+nav .nav-group:first-child a { font-weight: 600; font-size: 1.05rem; }
+nav .workshop a { font-size: 0.95rem; }
+nav a:hover { color: var(--text-primary); }
+nav a[aria-current="page"] { color: var(--text-primary); border-bottom-color: var(--accent); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 main {
   max-width: 1200px;
@@ -255,3 +270,65 @@ form.inline { display: inline-flex; gap: 6px; }
 details.report { margin: 12px 0; }
 .native-line { fill: none; stroke: var(--reference); stroke-width: 2; stroke-dasharray: 2 3; opacity: 0.8; }
 .chart .key.native::before { border-top: 2px dotted var(--reference); }
+
+/* lessons */
+.tab-title { margin-top: 0.5rem; }
+.intro { max-width: 46rem; color: var(--text-secondary); }
+.lesson-live { display: flex; flex-wrap: wrap; align-items: center; gap: 1.2rem; margin: 0.8rem 0; }
+.lesson-live .timer { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.meter-label { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--text-secondary); font-size: 0.9rem; }
+.meter-label meter { width: 140px; }
+.lesson-list { list-style: none; padding: 0; display: grid; gap: 0.8rem; }
+.lesson-item { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem 1rem; }
+.lesson-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.lesson-title { font-size: 1.1rem; font-weight: 600; }
+a { color: var(--accent); }
+.lesson-state { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
+.lesson-state progress { width: 180px; }
+.level-badge { font-weight: 600; }
+.tag { font-size: 0.8rem; padding: 0.05em 0.6em; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); }
+.tag.live { color: var(--error); border-color: var(--error); }
+.s-error-text { color: var(--error); }
+button.link.danger { color: var(--error); }
+.note { background: var(--surface-1); border-left: 3px solid var(--accent); padding: 0.5rem 0.8rem; border-radius: 4px; }
+.title-input { font-size: 1.3rem; font-weight: 600; max-width: 36rem; }
+.lesson-h { margin: 0.3rem 0; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.6rem; margin: 1rem 0; }
+.stat { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 0.7rem 0.9rem; display: flex; flex-direction: column; }
+.stat-value { font-size: 1.8rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat.level .stat-value { color: var(--accent); }
+.stat.s-error .stat-value { color: var(--error); }
+.stat-label { color: var(--text-secondary); font-size: 0.9rem; }
+.stat-note { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.2rem; }
+.explain summary, .kinds summary { cursor: pointer; color: var(--text-secondary); }
+.explain p { max-width: 46rem; }
+
+.mistakes { padding-left: 1.4rem; display: grid; gap: 0.6rem; }
+.mistakes .mistake-text { font-size: 1.1rem; }
+.mistakes .label { color: var(--text-muted); font-size: 0.85rem; }
+.mistakes .notation { font-size: 1.15rem; }
+.mistakes button.secondary { padding: 0.15em 0.6em; font-size: 0.9em; }
+.occurrences { list-style: none; padding-left: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0; }
+.filters button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 0.35em; font-size: 0.85em; }
+.transcript .time { font-variant-numeric: tabular-nums; margin-right: 0.3rem; }
+.fix-line { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; }
+.fix-line input { flex: 1 1 20rem; }
+
+/* progress */
+.progress-chart .level-line { fill: none; stroke: var(--series-1); stroke-width: 2; }
+.progress-chart .point { cursor: pointer; }
+.progress-chart .point circle { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
+.progress-chart .point .whisker { stroke: var(--series-1); stroke-width: 2; opacity: 0.45; }
+.progress-chart .point.short circle { fill: var(--surface-1); stroke: var(--unverified); stroke-dasharray: 2 2; }
+.progress-chart .bar { fill: var(--series-1); opacity: 0.6; }
+.progress-chart .bar.short { fill: var(--unverified); opacity: 0.4; }
+.progress-chart figcaption { margin-top: 0.8rem; font-size: 0.85rem; }
+.chart .key.counted::before { border-top: 2px solid var(--series-1); }
+.chart .key.short::before { border-top: 2px dashed var(--unverified); }
+.word-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem 2rem; }
+.word-list ul { padding-left: 1.2rem; }
+.word-list .word { font-size: 1.05rem; }

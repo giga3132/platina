@@ -4,22 +4,66 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Platina</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M6 22h7l3-12h10' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
   </head>
   <body>
     <header class="top">
       <h1>プラチナ <span>Platina</span></h1>
       <p class="tagline">Japanese pitch-accent coach</p>
-      <nav role="tablist">
-        <button role="tab" data-tab="speak" aria-selected="true">Speak</button>
-        <button role="tab" data-tab="type" aria-selected="false">Type</button>
-        <button role="tab" data-tab="nhk" aria-selected="false">My NHK accents</button>
-        <button role="tab" data-tab="practice" aria-selected="false">Practice</button>
+      <nav aria-label="Sections">
+        <div class="nav-group">
+          <span class="nav-label" id="nav-lessons">My lessons</span>
+          <ul aria-labelledby="nav-lessons">
+            <li><a href="#lessons" data-tab="lessons">Lessons</a></li>
+            <li><a href="#progress" data-tab="progress">Progress</a></li>
+          </ul>
+        </div>
+        <div class="nav-group workshop">
+          <span class="nav-label" id="nav-workshop">Workshop <span class="nav-hint">one-off recordings and experiments</span></span>
+          <ul aria-labelledby="nav-workshop">
+            <li><a href="#quick-check" data-tab="quick-check">Quick check</a></li>
+            <li><a href="#type" data-tab="type">Type</a></li>
+            <li><a href="#nhk" data-tab="nhk">My NHK accents</a></li>
+            <li><a href="#practice" data-tab="practice">Practice</a></li>
+          </ul>
+        </div>
       </nav>
     </header>
 
     <main>
       <div class="content">
-        <section id="tab-speak" class="tab">
+        <section id="tab-lessons" class="tab">
+          <div id="lessons-home">
+            <h2 class="tab-title">Lessons</h2>
+            <p class="intro">
+              Record your class, then review your pitch accent afterwards: your clearest mistakes, the ones you
+              repeat, and everything you said. Wear headphones so only your own voice is recorded.
+            </p>
+            <div class="controls">
+              <button id="lesson-record" class="record" type="button">● Start lesson recording</button>
+              <label class="upload secondary">Upload a recording<input id="lesson-upload" type="file" accept="audio/*,video/mp4,video/webm" hidden /></label>
+            </div>
+            <div id="lesson-live" class="lesson-live" hidden>
+              <span id="lesson-timer" class="timer" aria-live="off">0:00</span>
+              <label class="meter-label">Microphone <meter id="lesson-meter" min="0" max="1" value="0"></meter></label>
+              <span id="lesson-saved" class="muted" aria-live="polite"></span>
+            </div>
+            <p id="lesson-status" class="muted" aria-live="polite"></p>
+            <h2>Your lessons</h2>
+            <ul id="lesson-list" class="lesson-list"></ul>
+          </div>
+          <div id="lesson-view" hidden></div>
+        </section>
+
+        <section id="tab-progress" class="tab" hidden>
+          <h2 class="tab-title">Progress</h2>
+          <div id="progress-view"></div>
+        </section>
+
+        <section id="tab-quick-check" class="tab" hidden>
+          <p class="muted">
+            One-off recordings to check a sentence or experiment. They aren't saved and don't count in your lessons or progress.
+          </p>
           <div class="controls">
             <button id="record" class="record" type="button">● Record</button>
             <span id="timer" class="muted"></span>
@@ -43,6 +87,7 @@
         </section>
 
         <section id="tab-nhk" class="tab" hidden>
+          <p><button id="nhk-back" type="button" class="link" hidden>← Back to lesson</button></p>
           <p class="muted">
             Accents you checked in the NHK 日本語発音アクセント新辞典 override every other source.
             Enter the dictionary form and its accent number(s); conjugated forms and phrases follow automatically.

@@ -57,6 +57,8 @@ function chip(p: Phrase | AnalyzedPhrase, onSelect: () => void): HTMLElement {
   const node = el("button", { class: `phrase s-${status} c-${p.confidence}`, type: "button" });
   node.append(el("span", { class: "surface" }, p.text));
   node.append(notationNode(p, p.accent));
+  // the verdict in words, not only as a colour
+  if ("status" in p) node.append(el("span", { class: "sr-only" }, `: ${STATUS_LABEL[p.status]}`));
   if ("status" in p && (p.status === "error" || p.status === "unverified") && p.observed !== null) {
     const heard = el("span", { class: "heard" }, "you: ");
     heard.append(notationNode(p, p.observed, p.accent));

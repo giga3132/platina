@@ -30,7 +30,11 @@ class Utterance:
 
 @lru_cache(maxsize=1)
 def _vad():
+    import torch
+
+    threads = torch.get_num_threads()
     from silero_vad import load_silero_vad
+    torch.set_num_threads(threads)  # importing silero_vad limits the whole process to 1 CPU thread
     return load_silero_vad()
 
 

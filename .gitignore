@@ -10,3 +10,5 @@ backend/data/*.sqlite
 # Labelled recordings of your voice, native review queue
 backend/data/recordings/
 backend/data/review.json
+# Recorded lessons (your voice)
+backend/data/lessons/

@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import threading
 from collections import Counter
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
 
 import json
 
-from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -21,13 +22,22 @@ from .accent.engine import analyze_text, notation
 from .accent.overrides import OverrideStore
 from .accent.variants import VariantStore
 from .labels import DATA, LabelStore
+from .lessons import LessonJobs, LessonStore
 
-app = FastAPI(title="Platina")
+
+@asynccontextmanager
+async def lifespan(_app):
+    jobs.resume()  # lessons a restart interrupted
+    yield
+
+
+app = FastAPI(title="Platina", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 overrides = OverrideStore()
 labels = LabelStore()
 variants = VariantStore()
+lessons = LessonStore()
 REVIEW = DATA / "review.json"  # written by tools/review_queue.py
 _gpu = threading.Lock()  # one analysis at a time: the models share a 4 GB GPU
 
@@ -185,6 +195,7 @@ def analyze(audio: UploadFile = File(...), text: str | None = Form(None)):
 
 class LabelMeta(BaseModel):
     source: str = Field(pattern="^(practice|report)$")
+    lesson: str | None = Field(None, description="cut the clip from this lesson's audio instead of an upload")
     text: str
     phrase_index: int = Field(description="index into analyze_text(text)'s phrases")
     said: int | None = Field(None, description="accent really said (0 = flat); null = not sure")
@@ -195,7 +206,7 @@ class LabelMeta(BaseModel):
 
 
 @app.post("/labels")
-def add_label(audio: UploadFile = File(...), meta: str = Form(...)):
+def add_label(audio: UploadFile | None = File(None), meta: str = Form(...)):
     """Store one utterance of the user's voice with the accent really said
     in one of its phrases."""
     from .audio.pitch import SAMPLE_RATE, load_audio
@@ -207,11 +218,18 @@ def add_label(audio: UploadFile = File(...), meta: str = Form(...)):
     p = phrases[m.phrase_index]
     if m.said is not None and not 0 <= m.said <= len(p.moras):
         raise HTTPException(422, "accent out of range")
-    wav = load_audio(audio.file.read())
-    end = len(wav) if m.end is None else int(m.end * SAMPLE_RATE)
-    clip = labels.save_clip(wav[int(m.start * SAMPLE_RATE):end])
+    if m.lesson:
+        if _lesson(m.lesson)["status"] != "done":
+            raise HTTPException(409, "the lesson isn't analyzed yet")
+        clip = labels.save_clip(load_audio(lessons.audio(m.lesson), start=m.start, end=m.end))
+    elif audio is not None:
+        wav = load_audio(audio.file.read())
+        end = len(wav) if m.end is None else int(m.end * SAMPLE_RATE)
+        clip = labels.save_clip(wav[int(m.start * SAMPLE_RATE):end])
+    else:
+        raise HTTPException(422, "send the audio or a lesson id")
     labels.add(source=m.source, clip=clip, text=m.text, phrase_index=m.phrase_index, moras=p.moras,
-               expected=p.alternatives, said=m.said, verdict=m.verdict, session=m.session)
+               expected=p.alternatives, said=m.said, verdict=m.verdict, session=m.session or m.lesson or "")
     return {"ok": True, "stats": labels.stats()}
 
 
@@ -311,3 +329,188 @@ class VariantStatusIn(BaseModel):
 def set_variant(body: VariantStatusIn):
     variants.set_status(body.key, body.accent, body.status)
     return {"ok": True}
+
+
+# --- lessons: a whole class recorded, analyzed afterwards ------------------------
+
+def analysis_version() -> str:
+    """Names what a verdict depends on (accent model, NHK overrides, native
+    variants), so lessons analyzed under an older one can be redone."""
+    import hashlib
+
+    from .accent import model as learned
+
+    h = hashlib.sha1()
+    if learned.MODEL.exists():
+        st = learned.MODEL.stat()
+        h.update(f"{st.st_size}:{st.st_mtime_ns}".encode())
+    h.update(json.dumps(overrides.all(), sort_keys=True, ensure_ascii=False).encode())
+    h.update(json.dumps(sorted((v["key"], v["accent"], v["status"]) for v in variants.all()),
+                        ensure_ascii=False).encode())
+    return h.hexdigest()[:12]
+
+
+def _segment(wav):
+    from .audio.asr import segment
+
+    return [(u.start, u.end) for u in segment(wav)]
+
+
+def _transcribe(wav):
+    from .audio.asr import transcribe
+
+    return transcribe(wav)
+
+
+def _analyze(wav, text, offset):
+    from .analyze import analyze_audio
+
+    return analyze_audio(wav, text, overrides, offset=offset, variants=variants)
+
+
+jobs = LessonJobs(lessons, segment=_segment, transcribe=_transcribe, analyze=_analyze,
+                  version=analysis_version, gpu=_gpu)
+
+
+def _lesson(lid: str) -> dict:
+    try:
+        lesson = lessons.get(lid)
+    except KeyError:
+        lesson = None
+    if lesson is None:
+        raise HTTPException(404, "no such lesson")
+    return lesson
+
+
+def _brief(lesson: dict, version: str) -> dict:
+    out = {k: lesson[k] for k in ("id", "created_at", "title", "status", "done", "total", "duration", "error")}
+    out["summary"] = lesson["summary"]
+    out["outdated"] = lesson["status"] == "done" and lesson["version"] != version
+    return out
+
+
+class LessonIn(BaseModel):
+    title: str = ""
+
+
+@app.post("/lessons")
+def lesson_create(body: LessonIn | None = None):
+    """Start recording a lesson; pieces follow with /lessons/{id}/chunk."""
+    return {"id": lessons.create(body.title if body else "")}
+
+
+@app.post("/lessons/upload")
+def lesson_upload(audio: UploadFile = File(...), title: str = Form("")):
+    """A whole recording made elsewhere (phone, Zoom), analyzed like a lesson."""
+    lid = lessons.create(title or Path(audio.filename or "").stem)
+    lessons.save_upload(lid, audio.file.read())
+    try:
+        lessons.finish(lid)
+    except Exception as e:  # noqa: BLE001 - not audio ffmpeg can read
+        lessons.delete(lid)
+        raise HTTPException(422, f"couldn't read this file as audio: {e}") from e
+    jobs.submit(lid)
+    return {"id": lid}
+
+
+@app.post("/lessons/{lid}/chunk")
+async def lesson_chunk(lid: str, seq: int, request: Request):
+    """Piece `seq` of a lesson being recorded (raw MediaRecorder data)."""
+    _lesson(lid)
+    try:
+        saved = lessons.append_chunk(lid, seq, await request.body())
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+    return {"saved": saved}
+
+
+@app.post("/lessons/{lid}/finish")
+def lesson_finish(lid: str):
+    lesson = _lesson(lid)
+    if lesson["status"] != "recording":
+        raise HTTPException(409, "already finished")
+    try:
+        lessons.finish(lid)
+    except ValueError as e:  # nothing recorded
+        lessons.delete(lid)
+        raise HTTPException(422, str(e)) from e
+    except Exception as e:  # noqa: BLE001 - keep the raw pieces, show the error in the list
+        lessons.update(lid, status="failed", error=f"couldn't convert the recording: {e}")
+        raise HTTPException(422, f"couldn't convert the recording: {e}") from e
+    jobs.submit(lid)
+    return {"ok": True}
+
+
+@app.post("/lessons/{lid}/retry")
+def lesson_retry(lid: str):
+    """Analyze again after a failure."""
+    if _lesson(lid)["status"] != "failed":
+        raise HTTPException(409, "only a failed lesson can be retried")
+    if lessons.audio(lid).exists():
+        jobs.submit(lid)
+        return {"ok": True}
+    lessons.update(lid, status="recording")  # the conversion failed: try it again
+    return lesson_finish(lid)
+
+
+@app.get("/lessons")
+def lesson_list():
+    version = analysis_version()
+    return [_brief(ls, version) for ls in reversed(lessons.all())]
+
+
+@app.get("/lessons/{lid}")
+def lesson_get(lid: str):
+    return {**_brief(_lesson(lid), analysis_version()), "utterances": lessons.utterances(lid)}
+
+
+@app.get("/lessons/{lid}/audio")
+def lesson_audio(lid: str):
+    _lesson(lid)
+    if not lessons.audio(lid).exists():
+        raise HTTPException(404, "no audio yet")
+    return FileResponse(lessons.audio(lid), media_type="audio/webm")
+
+
+@app.patch("/lessons/{lid}")
+def lesson_rename(lid: str, body: LessonIn):
+    _lesson(lid)
+    lessons.update(lid, title=body.title.strip() or "Lesson")
+    return {"ok": True}
+
+
+@app.delete("/lessons/{lid}")
+def lesson_delete(lid: str):
+    _lesson(lid)
+    lessons.delete(lid)
+    return {"ok": True}
+
+
+@app.put("/lessons/{lid}/utterances/{idx}")
+def lesson_fix_line(lid: str, idx: int, body: TextIn):
+    """Corrected transcript for one line: only that line is judged again."""
+    if _lesson(lid)["status"] != "done":
+        raise HTTPException(409, "the lesson is still being analyzed")
+    try:
+        u = jobs.reanalyze_line(lid, idx, body.text.strip())
+    except KeyError as e:
+        raise HTTPException(404, "no such line") from e
+    return {"utterance": u, "summary": lessons.get(lid)["summary"]}
+
+
+@app.post("/lessons/reanalyze")
+def lesson_reanalyze():
+    """Judge lessons analyzed with an older model or older NHK accents again."""
+    version = analysis_version()
+    todo = [ls["id"] for ls in lessons.all() if ls["status"] == "done" and ls["version"] != version]
+    for lid in todo:
+        jobs.submit(lid)
+    return {"queued": len(todo)}
+
+
+@app.get("/progress")
+def progress_overview():
+    from .progress import overview
+
+    version = analysis_version()
+    return overview([_brief(ls, version) for ls in lessons.all()], lessons.utterances)

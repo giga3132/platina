@@ -4,21 +4,28 @@
 export class Recorder {
   private media?: MediaRecorder;
   private chunks: Blob[] = [];
-  private stream?: MediaStream;
+  stream?: MediaStream;
   startedAt = 0;
 
   get recording(): boolean {
     return this.media?.state === "recording";
   }
 
-  async start(): Promise<void> {
+  /** With `onPiece`, every `sliceMs` of audio is handed over as it is
+   * recorded (long recordings: nothing piles up in memory) and stop()
+   * resolves to an empty blob. */
+  async start(onPiece?: (piece: Blob) => void, sliceMs = 250): Promise<void> {
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
     });
     this.chunks = [];
     this.media = new MediaRecorder(this.stream);
-    this.media.ondataavailable = (e) => e.data.size && this.chunks.push(e.data);
-    this.media.start(250);
+    this.media.ondataavailable = (e) => {
+      if (!e.data.size) return;
+      if (onPiece) onPiece(e.data);
+      else this.chunks.push(e.data);
+    };
+    this.media.start(sliceMs);
     this.startedAt = performance.now();
   }
 
@@ -34,23 +41,30 @@ export class Recorder {
   }
 }
 
-/** Plays one time range of a recording. */
+/** Plays one time range of a recording (a blob, or a URL the server streams). */
 export class Clip {
   private audio = new Audio();
   private timer?: number;
 
-  constructor(blob: Blob) {
-    this.audio.src = URL.createObjectURL(blob);
+  constructor(source: Blob | string) {
+    this.audio.src = typeof source === "string" ? source : URL.createObjectURL(source);
+    this.audio.preload = "metadata";
   }
 
   play(start: number, end: number): void {
     window.clearTimeout(this.timer);
-    this.audio.currentTime = Math.max(0, start - 0.05);
-    void this.audio.play();
-    this.timer = window.setTimeout(() => this.audio.pause(), (end - start + 0.15) * 1000);
+    const go = () => {
+      this.audio.currentTime = Math.max(0, start - 0.05);
+      void this.audio.play();
+      this.timer = window.setTimeout(() => this.audio.pause(), (end - start + 0.15) * 1000);
+    };
+    // a streamed file can only be seeked once its metadata is in
+    if (this.audio.readyState >= HTMLMediaElement.HAVE_METADATA) go();
+    else this.audio.addEventListener("loadedmetadata", go, { once: true });
   }
 
   dispose(): void {
-    URL.revokeObjectURL(this.audio.src);
+    this.audio.pause();
+    if (this.audio.src.startsWith("blob:")) URL.revokeObjectURL(this.audio.src);
   }
 }

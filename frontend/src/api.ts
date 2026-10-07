@@ -163,6 +163,7 @@ export interface LabelStats {
 
 export interface LabelMeta {
   source: "practice" | "report";
+  lesson?: string; // cut the clip from this lesson's audio (no upload)
   text: string;
   phrase_index: number;
   said: number | null;
@@ -171,9 +172,9 @@ export interface LabelMeta {
   verdict?: string | null;
 }
 
-export async function addLabel(audio: Blob, meta: LabelMeta): Promise<LabelStats> {
+export async function addLabel(audio: Blob | null, meta: LabelMeta): Promise<LabelStats> {
   const form = new FormData();
-  form.append("audio", audio, "recording");
+  if (audio) form.append("audio", audio, "recording");
   form.append("meta", JSON.stringify(meta));
   return (await check<{ stats: LabelStats }>(await fetch("/api/labels", { method: "POST", body: form }))).stats;
 }
@@ -239,4 +240,185 @@ export async function setVariant(key: string, accent: number, status: Variant["s
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ key, accent, status }),
   }));
+}
+
+// --- lessons: a whole class recorded, analyzed afterwards -----------------------
+
+export interface Occurrence {
+  utterance: number;
+  phrase: number;
+  start: number;
+  end: number;
+}
+
+export interface MistakeItem extends Occurrence {
+  text: string;
+  moras: string[];
+  accent: number;
+  said: number;
+  score: number;
+}
+
+export interface RepeatedMistake {
+  text: string;
+  moras: string[];
+  accent: number;
+  said: number;
+  count: number;
+  occurrences: Occurrence[];
+}
+
+export interface TypeCount {
+  correct: number;
+  judged: number;
+}
+
+export interface LessonSummary {
+  speaking_s: number;
+  utterances: number;
+  counts: Partial<Record<Status, number>>;
+  judged: number;
+  correct: number;
+  mistakes: number;
+  accuracy: number | null;
+  level: number;
+  level_range: [number, number];
+  reliable: boolean;
+  by_type: { flat: TypeCount; accented: TypeCount };
+  kinds: Record<string, number>;
+  obvious: MistakeItem[];
+  repeated: RepeatedMistake[];
+}
+
+export type LessonStatus = "recording" | "queued" | "processing" | "done" | "failed";
+
+export interface Lesson {
+  id: string;
+  created_at: number;
+  title: string;
+  status: LessonStatus;
+  done: number;
+  total: number;
+  duration: number | null;
+  error: string | null;
+  summary: LessonSummary | null;
+  outdated: boolean;
+}
+
+export interface LessonUtterance {
+  idx: number;
+  start: number;
+  end: number;
+  text: string;
+  edited: boolean;
+  skipped: string | null;
+  result: { text: string; phrases: AnalyzedPhrase[] } | null;
+}
+
+export interface LessonDetail extends Lesson {
+  utterances: LessonUtterance[];
+}
+
+export async function createLesson(title = ""): Promise<string> {
+  return (await check<{ id: string }>(await post("/api/lessons", { title }))).id;
+}
+
+/** One recorded piece; resolves to how many pieces the server has. */
+export async function sendLessonChunk(id: string, seq: number, piece: Blob): Promise<number> {
+  const res = await fetch(`/api/lessons/${id}/chunk?seq=${seq}`, { method: "POST", body: piece });
+  return (await check<{ saved: number }>(res)).saved;
+}
+
+export async function finishLesson(id: string): Promise<void> {
+  await check(await fetch(`/api/lessons/${id}/finish`, { method: "POST" }));
+}
+
+export async function uploadLesson(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("audio", file, file.name);
+  return (await check<{ id: string }>(await fetch("/api/lessons/upload", { method: "POST", body: form }))).id;
+}
+
+export async function listLessons(): Promise<Lesson[]> {
+  return check(await fetch("/api/lessons"));
+}
+
+export async function getLesson(id: string): Promise<LessonDetail> {
+  return check(await fetch(`/api/lessons/${id}`));
+}
+
+export function lessonAudioUrl(id: string): string {
+  return `/api/lessons/${id}/audio`;
+}
+
+export async function renameLesson(id: string, title: string): Promise<void> {
+  await check(await fetch(`/api/lessons/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  }));
+}
+
+export async function deleteLesson(id: string): Promise<void> {
+  await check(await fetch(`/api/lessons/${id}`, { method: "DELETE" }));
+}
+
+export async function retryLesson(id: string): Promise<void> {
+  await check(await fetch(`/api/lessons/${id}/retry`, { method: "POST" }));
+}
+
+export async function fixLessonLine(id: string, idx: number, text: string):
+    Promise<{ utterance: LessonUtterance; summary: LessonSummary }> {
+  return check(await fetch(`/api/lessons/${id}/utterances/${idx}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  }));
+}
+
+export async function reanalyzeLessons(): Promise<number> {
+  return (await check<{ queued: number }>(await fetch("/api/lessons/reanalyze", { method: "POST" }))).queued;
+}
+
+// --- progress across lessons ---------------------------------------------------------
+
+export interface ProgressLesson {
+  id: string;
+  title: string;
+  created_at: number;
+  level: number;
+  level_range: [number, number];
+  accuracy: number | null;
+  judged: number;
+  speaking_s: number;
+  reliable: boolean;
+  by_type: { flat: TypeCount; accented: TypeCount };
+  kinds: Record<string, number>;
+  outdated: boolean;
+}
+
+export interface WordProgress {
+  lemma: string;
+  reading: string;
+  wrong: number;
+  total: number;
+  lessons: number;
+  last_wrong: Occurrence & { lesson: string; text: string };
+}
+
+export interface Progress {
+  lessons: ProgressLesson[];
+  current_level: number | null;
+  change: number | null;
+  speaking_s: number;
+  reliable_lessons: number;
+  min_judged: number;
+  min_speaking_s: number;
+  work_on: WordProgress[];
+  fixed: WordProgress[];
+  outdated: number;
+}
+
+export async function progress(): Promise<Progress> {
+  return check(await fetch("/api/progress"));
 }

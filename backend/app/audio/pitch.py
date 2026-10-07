@@ -14,14 +14,21 @@ SAMPLE_RATE = 16000
 F0_METHOD = os.environ.get("PLATINA_F0", "praat")
 
 
-def load_audio(path_or_bytes, sr: int = SAMPLE_RATE) -> np.ndarray:
+def load_audio(path_or_bytes, sr: int = SAMPLE_RATE, start: float | None = None,
+               end: float | None = None) -> np.ndarray:
     """Decode any audio ffmpeg understands (wav, webm/opus from browsers,
-    m4a, mp3, ...) — a path or raw bytes — to mono float32 at sr."""
+    m4a, mp3, ...) — a path or raw bytes — to mono float32 at sr. With
+    start/end (seconds), only that slice of a file."""
     import subprocess
 
     src = "pipe:0" if isinstance(path_or_bytes, (bytes, bytearray)) else str(path_or_bytes)
+    span = []
+    if start is not None:
+        span += ["-ss", f"{start:.3f}"]
+    if end is not None:
+        span += ["-to", f"{end:.3f}"]
     proc = subprocess.run(
-        ["ffmpeg", "-nostdin", "-loglevel", "error", "-i", src,
+        ["ffmpeg", "-nostdin", "-loglevel", "error", *span, "-i", src,
          "-f", "f32le", "-ac", "1", "-ar", str(sr), "pipe:1"],
         input=path_or_bytes if src == "pipe:0" else None,
         capture_output=True, check=True,

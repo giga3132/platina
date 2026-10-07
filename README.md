@@ -1,6 +1,9 @@
 # platina
 App for practicing Japanese pitch accent.
 
+> **Using Platina for your lessons? Start here: [LESSONS.md](LESSONS.md)**. It's a step-by-step guide to
+> recording your classes, reviewing your mistakes and following your progress, with no programming needed.
+
 Speak (read a book aloud or just talk). Platina transcribes the speech, works out the
 expected accent of every accent phrase, including how accents change when words join,
 measures the accent you actually produced, and marks the differences:
@@ -11,6 +14,14 @@ measures the accent you actually produced, and marks the differences:
 
 `＼` = the pitch drops after this mora, `━` = it stays high to the end (flat / 平板).
 Phrases you said differently are red, and show what you said (`you: オ＼トオ`).
+
+The app has two areas:
+
+- **My lessons** (*Lessons*, *Progress*). Record a whole class, review it afterwards (most obvious mistakes,
+  repeated mistakes, the full transcript), and follow your level across lessons. See [LESSONS.md](LESSONS.md).
+  Code: `backend/app/{lessons,progress}.py`, `frontend/src/{lessons,progress}.ts`.
+- **Workshop** (*Quick check*, *Type*, *My NHK accents*, *Practice*). One-off recordings, typed text, your NHK
+  accents, and labelled takes for training. Nothing here changes your lessons or progress.
 
 ## How it works
 
@@ -64,9 +75,18 @@ cd frontend && npm install
 ## Run
 
 ```sh
+./start.sh            # API + frontend (+ VOICEVOX if installed), opens http://localhost:5173/#lessons
+```
+
+or by hand:
+
+```sh
 cd backend && ../.venv/bin/uvicorn app.main:app --port 8000     # API
 cd frontend && npm run dev                                       # http://localhost:5173
 ```
+
+`PLATINA_API_PORT` / `PLATINA_WEB_PORT` change the ports. Lessons are stored in `backend/data/lessons.sqlite` and
+`backend/data/lessons/` (`PLATINA_LESSONS_DB` / `PLATINA_LESSONS_DIR`), both gitignored.
 
 The first analysis downloads the speech models (~2.5 GB) and loads them onto the GPU (about 2.3 GB used).
 

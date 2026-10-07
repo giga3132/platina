@@ -29,6 +29,7 @@ import numpy as np
 from app.accent.features import possible
 from app.analyze import FINAL_PARTICLES, MIN_ALIGN_SCORE, MIN_MORA_S, _status
 from app.audio.pitch import semitones
+from app.progress import kind_of
 
 from .add_f0 import use_f0
 from .ssl_feats import attach
@@ -101,15 +102,6 @@ def new_detector():
             cache[key] = detect_phrases(rec)
         return cache[key][rec["phrases"].index(ph)]
     return detect
-
-
-def kind_of(expected: int, said: int, n: int) -> str:
-    e_flat, s_flat = expected in (0, n), said in (0, n)
-    if e_flat and not s_flat:
-        return "accented for flat"
-    if s_flat and not e_flat:
-        return "flat for accented"
-    return "1 mora off" if abs(expected - said) == 1 else "2+ moras off"
 
 
 def evaluate(recs, detect, kinds, status=_status) -> dict:

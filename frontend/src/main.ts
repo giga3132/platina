@@ -5,7 +5,9 @@ import type { AnalyzeResult, Word } from "./api";
 import { renderDetail } from "./detail";
 import { Clip, Recorder } from "./recorder";
 import { STATUS_LABEL, el, notationNode, phraseRow } from "./render";
+import { initLessons, showLessons } from "./lessons";
 import { initPractice } from "./practice";
+import { showProgress } from "./progress";
 import { tutorButton } from "./tutor";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -16,21 +18,52 @@ let clip: Clip | undefined;
 let last: { audio: Blob; text: string } | undefined;
 const toCheck = new Map<string, Word>();
 
-// --- tabs -------------------------------------------------------------------
+// --- tabs: "My lessons" (Lessons, Progress) and the Workshop ------------------
+// Every tab has its own address (#lessons, #progress, #quick-check, ...), so
+// either area can be bookmarked; #lessons/<id> opens one lesson.
 
-function showTab(name: string): void {
-  document.querySelectorAll<HTMLElement>("[role=tab]").forEach((b) =>
-    b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+const TABS = ["lessons", "progress", "quick-check", "type", "nhk", "practice"] as const;
+type Tab = (typeof TABS)[number];
+const isTab = (t: string): t is Tab => (TABS as readonly string[]).includes(t);
+const nhkBack = $<HTMLButtonElement>("nhk-back");
+
+function rememberedTab(): Tab {
+  try {
+    const t = localStorage.getItem("platina-tab");
+    if (t && isTab(t)) return t;
+  } catch { /* storage blocked: default */ }
+  return "lessons";
+}
+
+function route(): void {
+  const [head, ...rest] = location.hash.replace(/^#/, "").split("/").map(decodeURIComponent);
+  if (!isTab(head)) {
+    history.replaceState(null, "", `#${rememberedTab()}`);
+    return route();
+  }
+  showTab(head, rest);
+}
+
+function showTab(name: Tab, rest: string[] = []): void {
+  document.querySelectorAll<HTMLElement>("nav a[data-tab]").forEach((a) =>
+    a.dataset.tab === name ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
   document.querySelectorAll<HTMLElement>(".tab").forEach((s) => (s.hidden = s.id !== `tab-${name}`));
   detail.hidden = true;
+  try {
+    localStorage.setItem("platina-tab", name);
+  } catch { /* storage blocked: not remembered */ }
+  if (name !== "nhk") nhkBack.hidden = true;
   if (name === "nhk") void refreshOverrides();
   if (name === "practice") void initPractice();
+  if (name === "lessons") showLessons(rest);
+  if (name === "progress") void showProgress();
 }
-document.querySelectorAll<HTMLElement>("[role=tab]").forEach((b) =>
-  b.addEventListener("click", () => showTab(b.dataset.tab!)));
 
-function fixWord(w: Word): void {
-  showTab("nhk");
+/** Opens My NHK accents with the word filled in; from a lesson, with a way back. */
+function fixWord(w: Word, returnTo?: string): void {
+  location.hash = "#nhk";
+  nhkBack.hidden = !returnTo;
+  nhkBack.onclick = () => returnTo && (location.hash = returnTo);
   const form = $<HTMLFormElement>("nhk-form");
   (form.elements.namedItem("lemma") as HTMLInputElement).value = w.lemma;
   (form.elements.namedItem("reading") as HTMLInputElement).value = w.reading;
@@ -251,3 +284,9 @@ async function refreshVariants(): Promise<void> {
 api.tutorCredit().then(
   (credit) => ($("tutor-credit").textContent = `Tutor voice: ${credit}`),
   () => {});
+
+// --- start ---------------------------------------------------------------------
+
+initLessons({ detail, onFix: (w) => fixWord(w, location.hash) });
+window.addEventListener("hashchange", route);
+route();
