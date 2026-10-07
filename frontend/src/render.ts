@@ -1,20 +1,12 @@
 // Annotated transcript: one chip per accent phrase, kana in ＼/━ notation,
 // colored by verdict.
 
-import type { AnalyzedPhrase, Phrase, Status } from "./api";
+import type { AnalyzedPhrase, Confidence, Phrase, Status } from "./api";
+import { tr } from "./i18n";
 
-export const STATUS_LABEL: Record<Status, string> = {
-  correct: "Correct",
-  error: "Mistake",
-  uncertain: "Unclear",
-  unverified: "Check the dictionary",
-};
+export const statusLabel = (s: Status): string => tr()[`status_${s}`];
 
-export const CONFIDENCE_LABEL = {
-  nhk: "checked by you in NHK",
-  agree: "UniDic and OpenJTalk agree",
-  uncertain: "dictionaries disagree / unknown — not counted as your mistake",
-} as const;
+export const confidenceLabel = (c: Confidence): string => tr()[`conf_${c}`];
 
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -39,9 +31,9 @@ export function notationNode(phrase: Pick<Phrase, "moras">, accent: number, diff
     const span = el("span", { class: "mora" + (highs[i] ? " high" : "") }, m);
     if (ref && ref[i] !== highs[i]) span.classList.add("diff");
     out.append(span);
-    if (accent === i + 1) out.append(el("span", { class: "drop", "aria-label": "pitch drop" }, "＼"));
+    if (accent === i + 1) out.append(el("span", { class: "drop", "aria-label": tr().pitchDrop }, "＼"));
   });
-  if (accent === 0) out.append(el("span", { class: "flat", "aria-label": "flat (heiban)" }, "━"));
+  if (accent === 0) out.append(el("span", { class: "flat", "aria-label": tr().flatAria }, "━"));
   return out;
 }
 
@@ -58,13 +50,13 @@ function chip(p: Phrase | AnalyzedPhrase, onSelect: () => void): HTMLElement {
   node.append(el("span", { class: "surface" }, p.text));
   node.append(notationNode(p, p.accent));
   // the verdict in words, not only as a colour
-  if ("status" in p) node.append(el("span", { class: "sr-only" }, `: ${STATUS_LABEL[p.status]}`));
+  if ("status" in p) node.append(el("span", { class: "sr-only" }, `: ${statusLabel(p.status)}`));
   if ("status" in p && (p.status === "error" || p.status === "unverified") && p.observed !== null) {
-    const heard = el("span", { class: "heard" }, "you: ");
+    const heard = el("span", { class: "heard" }, tr().youColon);
     heard.append(notationNode(p, p.observed, p.accent));
     node.append(heard);
   }
-  node.title = "status" in p ? STATUS_LABEL[p.status] : CONFIDENCE_LABEL[p.confidence];
+  node.title = "status" in p ? statusLabel(p.status) : confidenceLabel(p.confidence);
   node.addEventListener("click", () => {
     document.querySelectorAll(".phrase.selected").forEach((n) => n.classList.remove("selected"));
     node.classList.add("selected");

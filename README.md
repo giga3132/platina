@@ -1,3 +1,5 @@
+English | [日本語](README.ja.md)
+
 # platina
 App for practicing Japanese pitch accent.
 
@@ -14,6 +16,10 @@ measures the accent you actually produced, and marks the differences:
 
 `＼` = the pitch drops after this mora, `━` = it stays high to the end (flat / 平板).
 Phrases you said differently are red, and show what you said (`you: オ＼トオ`).
+
+The interface is in English or Japanese: the button at the top right switches (日本語 / English). The choice is
+remembered in the browser; the first visit follows the browser's language. All UI text is in `frontend/src/i18n.ts`
+(`en`, and `ja` with the same type, so a missing translation is a compile error).
 
 The app has two areas:
 

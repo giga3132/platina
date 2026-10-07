@@ -1,3 +1,5 @@
+English | [日本語](LESSONS.ja.md)
+
 # Using Platina for your lessons
 
 Welcome! This guide is for you if you take Japanese classes (on Zoom, for example) and want to know how your
@@ -5,6 +7,9 @@ Welcome! This guide is for you if you take Japanese classes (on Zoom, for exampl
 whether you're improving over time.
 
 You don't need to know anything about programming. Each step tells you what to type and what you should see.
+
+**Japanese interface:** press **日本語** at the top right of Platina (**English** switches back). Your choice is
+remembered. A Japanese version of this guide is in [LESSONS.ja.md](LESSONS.ja.md).
 
 ## Contents
 

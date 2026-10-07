@@ -5,6 +5,7 @@
 import * as api from "./api";
 import type { AnalyzedPhrase, Lesson, LessonDetail, LessonUtterance, Status, Word } from "./api";
 import { renderDetail } from "./detail";
+import { locale, tr } from "./i18n";
 import { Clip, Recorder } from "./recorder";
 import { btn, el, notationNode, phraseRow } from "./render";
 import { tutorButton } from "./tutor";
@@ -32,12 +33,12 @@ export function clock(s: number): string {
 
 export function minutes(s: number): string {
   const m = Math.round(s / 60);
-  if (m < 1) return s > 0 ? "under 1 min" : "0 min";
-  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`;
+  if (m < 1) return s > 0 ? tr().underMinute : tr().zeroMinutes;
+  return tr().minutes(m);
 }
 
 export function dateOf(ts: number): string {
-  return new Date(ts * 1000).toLocaleString(undefined, {
+  return new Date(ts * 1000).toLocaleString(locale(), {
     weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   });
 }
@@ -74,7 +75,7 @@ class PieceUploader {
         this.onTrouble(null);
         this.onSaved(saved);
       } catch {
-        this.onTrouble(`Can't reach Platina — retrying (${this.queue.length} piece${this.queue.length > 1 ? "s" : ""} waiting). Keep this page open.`);
+        this.onTrouble(tr().retrying(this.queue.length));
         await sleep(delay);
         delay = Math.min(delay * 2, 30_000);
       }
@@ -114,24 +115,25 @@ function meter(stream: MediaStream): () => void {
 async function startRecording(): Promise<void> {
   const button = $<HTMLButtonElement>("lesson-record");
   const status = $("lesson-status");
+  const d = tr();
   button.disabled = true;
   let id: string;
   try {
-    id = await api.createLesson();
+    id = await api.createLesson(d.defaultLessonTitle(new Date()));
   } catch {
-    status.textContent = "Can't reach Platina. Is it running? Start it with ./start.sh.";
+    status.textContent = d.cantReach;
     button.disabled = false;
     return;
   }
   const saved = $("lesson-saved");
   const uploader = new PieceUploader(id,
-    (pieces) => (saved.textContent = `Saved up to ${clock((pieces * PIECE_MS) / 1000)}`),
-    (trouble) => (status.textContent = trouble ?? "Recording. You can leave this tab in the background during class."));
+    (pieces) => (saved.textContent = tr().savedUpTo(clock((pieces * PIECE_MS) / 1000))),
+    (trouble) => (status.textContent = trouble ?? tr().recordingBackground));
   try {
     await recorder.start((piece) => uploader.add(piece), PIECE_MS);
   } catch (e) {
     await api.deleteLesson(id).catch(() => {});
-    status.textContent = `Microphone unavailable: ${(e as Error).message}. Allow microphone access for this page and try again.`;
+    status.textContent = d.micUnavailableLesson((e as Error).message);
     button.disabled = false;
     return;
   }
@@ -141,11 +143,11 @@ async function startRecording(): Promise<void> {
   recording = { id, uploader, tick, stopMeter: meter(recorder.stream!) };
   $("lesson-live").hidden = false;
   $("lesson-timer").textContent = "0:00";
-  saved.textContent = "Nothing saved yet (the first piece arrives after 15 seconds)";
-  button.textContent = "■ Stop and analyze";
+  saved.textContent = d.nothingSavedYet;
+  button.textContent = d.lessonStop;
   button.classList.add("on");
   button.disabled = false;
-  status.textContent = "Recording. You can leave this tab in the background during class.";
+  status.textContent = d.recordingBackground;
   void refreshList();
 }
 
@@ -155,22 +157,22 @@ async function stopRecording(): Promise<void> {
   const button = $<HTMLButtonElement>("lesson-record");
   const status = $("lesson-status");
   button.disabled = true;
-  status.textContent = "Saving the last piece…";
+  const d = tr();
+  status.textContent = d.savingLastPiece;
   await recorder.stop();
   window.clearInterval(rec.tick);
   rec.stopMeter();
   await rec.uploader.flush();
   recording = undefined;
   $("lesson-live").hidden = true;
-  button.textContent = "● Start lesson recording";
+  button.textContent = tr().lessonRecord;
   button.classList.remove("on");
   button.disabled = false;
   try {
     await api.finishLesson(rec.id);
-    status.textContent = "Saved. Platina is analyzing your lesson; the progress bar below shows how far it is. " +
-      "You can close this page meanwhile.";
+    status.textContent = tr().lessonSavedAnalyzing;
   } catch (e) {
-    status.textContent = `Couldn't finish the recording: ${(e as Error).message}`;
+    status.textContent = tr().couldntFinish((e as Error).message);
   }
   void refreshList();
 }
@@ -178,46 +180,47 @@ async function stopRecording(): Promise<void> {
 // --- lesson list -----------------------------------------------------------------------
 
 function statusLine(ls: Lesson): HTMLElement {
+  const d = tr();
   const box = el("div", { class: "lesson-state" });
   switch (ls.status) {
     case "recording":
       if (recording?.id === ls.id) {
-        box.append(el("span", { class: "tag live" }, "Recording now"));
+        box.append(el("span", { class: "tag live" }, d.recordingNow));
       } else {
-        const go = btn("Analyze what was saved");
+        const go = btn(d.analyzeSaved);
         go.addEventListener("click", async () => {
           go.disabled = true;
-          await api.finishLesson(ls.id).catch((e) => alert(`Couldn't: ${(e as Error).message}`));
+          await api.finishLesson(ls.id).catch((e) => alert(d.couldnt((e as Error).message)));
           void refreshList();
         });
-        box.append(el("span", {}, "The recording was interrupted. "), go);
+        box.append(el("span", {}, d.interrupted), go);
       }
       break;
     case "queued":
-      box.append(el("span", {}, "Waiting to be analyzed…"));
+      box.append(el("span", {}, d.waitingAnalysis));
       break;
     case "processing": {
-      const label = ls.total ? `Analyzing: line ${ls.done} of ${ls.total}` : "Finding where you spoke…";
+      const label = ls.total ? d.analyzingLine(ls.done, ls.total) : d.findingSpeech;
       box.append(el("progress", { max: String(ls.total || 1), value: String(ls.done), "aria-label": label }),
         el("span", {}, ` ${label}`));
       break;
     }
     case "failed": {
-      const retry = btn("Try again");
+      const retry = btn(d.tryAgain);
       retry.addEventListener("click", async () => {
         retry.disabled = true;
-        await api.retryLesson(ls.id).catch((e) => alert(`Couldn't: ${(e as Error).message}`));
+        await api.retryLesson(ls.id).catch((e) => alert(d.couldnt((e as Error).message)));
         void refreshList();
       });
-      box.append(el("span", { class: "s-error-text" }, `Something went wrong: ${(ls.error ?? "").split("\n").filter(Boolean).pop() ?? ""} `), retry);
+      box.append(el("span", { class: "s-error-text" }, d.somethingWrong((ls.error ?? "").split("\n").filter(Boolean).pop() ?? "")), retry);
       break;
     }
     case "done": {
       const s = ls.summary!;
-      box.append(el("span", { class: "level-badge" }, `Level ${Math.round(s.level)}`),
-        el("span", {}, ` · ${s.mistakes} mistake${s.mistakes === 1 ? "" : "s"} in ${s.judged} judged phrases`));
-      if (!s.reliable) box.append(el("span", { class: "tag" }, "too short to count"));
-      if (ls.outdated) box.append(el("span", { class: "tag" }, "older analysis"));
+      box.append(el("span", { class: "level-badge" }, d.levelBadge(Math.round(s.level))),
+        el("span", {}, d.mistakesIn(s.mistakes, s.judged)));
+      if (!s.reliable) box.append(el("span", { class: "tag" }, d.tooShort));
+      if (ls.outdated) box.append(el("span", { class: "tag" }, d.olderAnalysis));
     }
   }
   return box;
@@ -225,30 +228,30 @@ function statusLine(ls: Lesson): HTMLElement {
 
 export async function refreshList(): Promise<void> {
   window.clearTimeout(listTimer);
+  const d = tr();
   const ul = $("lesson-list");
   let list: Lesson[];
   try {
     list = await api.listLessons();
   } catch {
-    ul.replaceChildren(el("li", { class: "muted" }, "Can't reach Platina. Is it running? Start it with ./start.sh."));
+    ul.replaceChildren(el("li", { class: "muted" }, d.cantReach));
     return;
   }
   ul.replaceChildren();
   if (!list.length) {
-    ul.append(el("li", { class: "muted" },
-      "No lessons yet. Press “Start lesson recording” before your next class, or upload a recording."));
+    ul.append(el("li", { class: "muted" }, d.noLessons));
   }
   for (const ls of list) {
     const title = ls.status === "done"
       ? el("a", { href: `#lessons/${ls.id}`, class: "lesson-title" }, ls.title)
       : el("span", { class: "lesson-title" }, ls.title);
     const meta = [dateOf(ls.created_at)];
-    if (ls.duration) meta.push(`${minutes(ls.duration)} recorded`);
-    if (ls.summary) meta.push(`you spoke ${minutes(ls.summary.speaking_s)}`);
-    const del = btn("Delete", { quiet: true, danger: true });
-    del.setAttribute("aria-label", `Delete ${ls.title}`);
+    if (ls.duration) meta.push(d.recorded(minutes(ls.duration)));
+    if (ls.summary) meta.push(d.youSpokeFor(minutes(ls.summary.speaking_s)));
+    const del = btn(d.delete, { quiet: true, danger: true });
+    del.setAttribute("aria-label", d.deleteNamed(ls.title));
     del.addEventListener("click", async () => {
-      if (!confirm(`Delete “${ls.title}”? Its recording and review are removed for good.`)) return;
+      if (!confirm(d.confirmDelete(ls.title))) return;
       await api.deleteLesson(ls.id);
       void refreshList();
     });
@@ -270,26 +273,22 @@ function statusesOf(u: LessonUtterance): Set<Status> {
 }
 
 function summaryBlock(lesson: LessonDetail): HTMLElement {
+  const d = tr();
   const s = lesson.summary!;
-  const box = el("section", { class: "lesson-summary", "aria-label": "Summary" });
+  const box = el("section", { class: "lesson-summary", "aria-label": d.summary });
   const card = (value: string, label: string, cls = "") =>
     el("div", { class: `stat ${cls}` }, el("span", { class: "stat-value" }, value), el("span", { class: "stat-label" }, label));
   box.append(el("div", { class: "stats" },
-    card(String(Math.round(s.level)), `Level (range ${Math.round(s.level_range[0])}–${Math.round(s.level_range[1])})`, "level"),
-    card(String(s.counts.correct ?? 0), "Correct"),
-    card(String(s.counts.error ?? 0), "Mistakes", "s-error"),
-    card(String(s.counts.uncertain ?? 0), "Unclear (not counted)"),
-    card(minutes(s.speaking_s), "You spoke")));
+    card(String(Math.round(s.level)), d.levelRange(Math.round(s.level_range[0]), Math.round(s.level_range[1])), "level"),
+    card(String(s.counts.correct ?? 0), d.status_correct),
+    card(String(s.counts.error ?? 0), d.mistakes, "s-error"),
+    card(String(s.counts.uncertain ?? 0), d.unclearNotCounted),
+    card(minutes(s.speaking_s), d.youSpoke)));
   if (!s.reliable) {
-    box.append(el("p", { class: "note" },
-      "A short lesson: it is shown here but doesn't count in your progress, because a few phrases can't show your level reliably."));
+    box.append(el("p", { class: "note" }, d.shortLessonNote));
   }
-  box.append(el("details", { class: "explain" }, el("summary", {}, "How is the level worked out?"),
-    el("p", {}, `Of the ${s.judged} phrases Platina could judge, you said ${s.correct} with the expected accent` +
-      (s.accuracy === null ? "." : ` (${Math.round(s.accuracy * 100)} %).`) +
-      " The level is the lowest value that share is likely to be, so it grows with how much you said: two correct" +
-      " phrases give about 42, 19 of 20 about 80, 285 of 300 about 92. Unclear phrases and words whose dictionary" +
-      " accent is unsure don't count either way.")));
+  box.append(el("details", { class: "explain" }, el("summary", {}, d.howLevel),
+    el("p", {}, d.lessonLevelExplain(s.judged, s.correct, s.accuracy === null ? null : Math.round(s.accuracy * 100)))));
   return box;
 }
 
@@ -298,74 +297,77 @@ function mistakeRow(text: string, moras: string[], accent: number, said: number,
   const phrase = { moras };
   const row = el("div", { class: "mistake" },
     el("span", { class: "mistake-text", lang: "ja" }, text),
-    el("span", { class: "pair" }, el("span", { class: "label" }, "expected"), notationNode(phrase, accent)),
-    el("span", { class: "pair said" }, el("span", { class: "label" }, "you said"), notationNode(phrase, said, accent)));
+    el("span", { class: "pair" }, el("span", { class: "label" }, tr().expected), notationNode(phrase, accent)),
+    el("span", { class: "pair said" }, el("span", { class: "label" }, tr().youSaid), notationNode(phrase, said, accent)));
   if (count) row.append(el("span", { class: "count-badge" }, `${count}×`));
   return row;
 }
 
 function obviousBlock(lesson: LessonDetail): HTMLElement {
+  const d = tr();
   const s = lesson.summary!;
-  const box = el("section", {}, el("h3", {}, "Most obvious mistakes"));
+  const box = el("section", {}, el("h3", {}, d.mostObvious));
   if (!s.obvious.length) {
-    box.append(el("p", { class: "muted" }, "No clear mistakes in this lesson."));
+    box.append(el("p", { class: "muted" }, d.noClearMistakes));
     return box;
   }
-  box.append(el("p", { class: "muted" }, "The phrases Platina is surest you said with a different accent."));
+  box.append(el("p", { class: "muted" }, d.obviousIntro));
   const ol = el("ol", { class: "mistakes" });
   for (const m of s.obvious) {
-    const play = btn("You", { play: true, title: "Hear yourself say it" });
+    const play = btn(d.you, { play: true, title: d.hearYourselfSayIt });
     play.addEventListener("click", () => view?.clip.play(m.start, m.end));
-    const go = btn(`Go to ${clock(m.start)}`, { quiet: true, title: "Show this line in the transcript" });
+    const go = btn(d.goTo(clock(m.start)), { quiet: true, title: d.showLine });
     go.addEventListener("click", () => focusPhrase(m.utterance, m.phrase));
     ol.append(el("li", {}, mistakeRow(m.text, m.moras, m.accent, m.said),
       el("div", { class: "actions" }, play,
-        tutorButton("Expected", () => api.speakPhrase(m.moras, m.accent), "Hear the expected accent"), go)));
+        tutorButton(d.expectedBtn, () => api.speakPhrase(m.moras, m.accent), d.hearExpected), go)));
   }
   box.append(ol);
   return box;
 }
 
 function repeatedBlock(lesson: LessonDetail): HTMLElement {
+  const d = tr();
   const s = lesson.summary!;
-  const box = el("section", {}, el("h3", {}, "Repeated mistakes"));
+  const box = el("section", {}, el("h3", {}, d.repeated));
   if (!s.repeated.length) {
-    box.append(el("p", { class: "muted" }, "No mistake came up more than once."));
+    box.append(el("p", { class: "muted" }, d.noRepeated));
     return box;
   }
   const ul = el("ul", { class: "mistakes" });
   for (const r of s.repeated) {
     const each = el("div", { class: "occurrences" });
     for (const o of r.occurrences) {
-      const play = btn(clock(o.start), { play: true, title: `Hear yourself at ${clock(o.start)}` });
+      const play = btn(clock(o.start), { play: true, title: d.hearYourselfAt(clock(o.start)) });
       play.addEventListener("click", () => view?.clip.play(o.start, o.end));
-      const go = btn("Go to line", { quiet: true });
+      const go = btn(d.goToLine, { quiet: true });
       go.addEventListener("click", () => focusPhrase(o.utterance, o.phrase));
       each.append(el("span", { class: "occurrence" }, play, go));
     }
     ul.append(el("li", {}, mistakeRow(r.text, r.moras, r.accent, r.said, r.count),
       el("div", { class: "actions" },
-        tutorButton("Expected", () => api.speakPhrase(r.moras, r.accent), "Hear the expected accent")),
-      el("details", { class: "each" }, el("summary", {}, "Hear each time"), each)));
+        tutorButton(d.expectedBtn, () => api.speakPhrase(r.moras, r.accent), d.hearExpected)),
+      el("details", { class: "each" }, el("summary", {}, d.hearEachTime), each)));
   }
   box.append(ul);
   return box;
 }
 
 function utteranceBlock(lesson: LessonDetail, u: LessonUtterance): HTMLElement {
+  const d = tr();
   const block = el("div", { class: "utterance", "data-idx": String(u.idx) });
-  const play = btn(clock(u.start), { play: true, quiet: true, title: `Hear this line (${clock(u.start)})` });
+  const play = btn(clock(u.start), { play: true, quiet: true, title: d.hearThisLine(clock(u.start)) });
   play.classList.add("time");
   play.addEventListener("click", () => view?.clip.play(u.start, u.end, 0.1, 0.3));
   const line = el("div", { class: "transcript" }, play, el("span", { class: "line-text", lang: "ja" }, u.text || "…"));
   if (u.skipped) {
-    line.append(el("span", { class: "tag" }, u.skipped === "not Japanese" ? "not Japanese, not judged" : "no speech, not judged"));
+    line.append(el("span", { class: "tag" }, d.skipped(u.skipped)));
   }
-  if (u.edited) line.append(el("span", { class: "tag" }, "text fixed by you"));
-  const fix = btn("Edit text", { quiet: true, title: "The transcript is wrong? Type what you said" });
+  if (u.edited) line.append(el("span", { class: "tag" }, d.textFixed));
+  const fix = btn(d.editText, { quiet: true, title: d.editTextTitle });
   fix.addEventListener("click", () => editLine(line, u));
   const actions = el("span", { class: "actions" }, fix);
-  if (u.result) actions.append(tutorButton("Tutor", () => api.speak(u.text), "Hear this line with the expected accent"));
+  if (u.result) actions.append(tutorButton(d.tutor, () => api.speak(u.text), d.hearLineExpected));
   line.append(actions);
   block.append(line);
   if (u.result) {
@@ -378,7 +380,7 @@ function utteranceBlock(lesson: LessonDetail, u: LessonUtterance): HTMLElement {
             source: "report", lesson: lesson.id, text: u.text, phrase_index: u.result!.phrases.indexOf(p), said,
             start: u.start, end: u.end, verdict: p.status,
           });
-          return `Saved — thanks. ${stats.your_phrases} labelled phrases of your voice so far.`;
+          return tr().reportSaved(stats.your_phrases);
         },
       })));
   }
@@ -386,9 +388,10 @@ function utteranceBlock(lesson: LessonDetail, u: LessonUtterance): HTMLElement {
 }
 
 function editLine(line: HTMLElement, u: LessonUtterance): void {
-  const input = el("input", { lang: "ja", value: u.text, "aria-label": "Corrected text of this line" });
-  const save = el("button", { type: "submit" }, "Save and re-check");
-  const cancel = el("button", { type: "button", class: "secondary" }, "Cancel");
+  const d = tr();
+  const input = el("input", { lang: "ja", value: u.text, "aria-label": d.correctedText });
+  const save = el("button", { type: "submit" }, d.saveRecheck);
+  const cancel = el("button", { type: "button", class: "secondary" }, d.cancel);
   save.classList.add("small");
   cancel.classList.add("small");
   const status = el("span", { class: "muted", "aria-live": "polite" });
@@ -398,7 +401,7 @@ function editLine(line: HTMLElement, u: LessonUtterance): void {
     e.preventDefault();
     if (!view) return;
     save.disabled = true;
-    status.textContent = "Checking this line again…";
+    status.textContent = d.checkingLine;
     try {
       const r = await api.fixLessonLine(view.lesson.id, u.idx, input.value);
       const i = view.lesson.utterances.findIndex((x) => x.idx === u.idx);
@@ -407,7 +410,7 @@ function editLine(line: HTMLElement, u: LessonUtterance): void {
       renderLesson();
       focusLine(u.idx);
     } catch (err) {
-      status.textContent = `Couldn't: ${(err as Error).message}`;
+      status.textContent = d.couldnt((err as Error).message);
       save.disabled = false;
     }
   });
@@ -416,9 +419,10 @@ function editLine(line: HTMLElement, u: LessonUtterance): void {
 }
 
 function transcriptBlock(lesson: LessonDetail): HTMLElement {
-  const box = el("section", { class: "lesson-transcript" }, el("h3", {}, "Everything you said"));
-  const filters = el("div", { class: "filters", role: "group", "aria-label": "Show" });
-  const options: [Filter, string][] = [["all", "All lines"], ["error", "Lines with mistakes"], ["uncertain", "Lines with unclear phrases"]];
+  const d = tr();
+  const box = el("section", { class: "lesson-transcript" }, el("h3", {}, d.everything));
+  const filters = el("div", { class: "filters", role: "group", "aria-label": d.show });
+  const options: [Filter, string][] = [["all", d.allLines], ["error", d.linesMistakes], ["uncertain", d.linesUnclear]];
   for (const [f, label] of options) {
     const b = el("button", { type: "button", class: "filter", "aria-pressed": String(view!.filter === f) }, label);
     b.addEventListener("click", () => {
@@ -429,7 +433,7 @@ function transcriptBlock(lesson: LessonDetail): HTMLElement {
     filters.append(b);
   }
   box.append(filters, el("p", { class: "muted keys" },
-    "Click a phrase for details. Keys: ", el("kbd", {}, "j"), " next mistake, ", el("kbd", {}, "k"), " previous."));
+    d.keysHelp[0], el("kbd", {}, "j"), d.keysHelp[1], el("kbd", {}, "k"), d.keysHelp[2]));
   const list = el("div", { class: "lines" });
   for (const u of lesson.utterances) list.append(utteranceBlock(lesson, u));
   box.append(list);
@@ -480,32 +484,32 @@ function step(dir: 1 | -1): void {
 function renderLesson(): void {
   if (!view) return;
   const lesson = view.lesson;
+  const d = tr();
   const host = $("lesson-view");
-  const title = el("input", { class: "title-input", value: lesson.title, "aria-label": "Lesson title" });
+  const title = el("input", { class: "title-input", value: lesson.title, "aria-label": d.lessonTitle });
   title.addEventListener("change", () => void api.renameLesson(lesson.id, title.value));
   const meta = [dateOf(lesson.created_at)];
-  if (lesson.duration) meta.push(`${minutes(lesson.duration)} recorded`);
+  if (lesson.duration) meta.push(d.recorded(minutes(lesson.duration)));
   host.replaceChildren(
-    el("p", {}, el("a", { href: "#lessons", class: "back-link" }, "← All lessons")),
+    el("p", {}, el("a", { href: "#lessons", class: "back-link" }, d.allLessons)),
     el("h2", { class: "lesson-h" }, title),
     el("p", { class: "muted" }, meta.join(" · ")));
 
   if (lesson.status !== "done") {
-    host.append(statusLine(lesson), el("p", { class: "muted" }, "The review appears here when the analysis is done."));
+    host.append(statusLine(lesson), el("p", { class: "muted" }, d.reviewAppears));
     viewTimer = window.setTimeout(() => {
       if (view?.lesson.id === lesson.id && !host.hidden) void openLesson(lesson.id);
     }, POLL_MS);
     return;
   }
   if (lesson.outdated) {
-    const again = btn("Re-check with the current settings");
+    const again = btn(d.recheckCurrent);
     again.addEventListener("click", async () => {
       again.disabled = true;
       await api.reanalyzeLessons();
       void openLesson(lesson.id);
     });
-    host.append(el("p", { class: "note" },
-      "This lesson was analyzed before you changed NHK accents or Platina got a new model. ", again));
+    host.append(el("p", { class: "note" }, d.outdatedLesson, again));
   }
   host.append(summaryBlock(lesson), obviousBlock(lesson), repeatedBlock(lesson), transcriptBlock(lesson));
   applyFilter();
@@ -520,8 +524,8 @@ async function openLesson(id: string, focus?: [number, number]): Promise<void> {
   try {
     lesson = await api.getLesson(id);
   } catch (e) {
-    host.replaceChildren(el("p", {}, el("a", { href: "#lessons", class: "back-link" }, "← All lessons")),
-      el("p", {}, `Couldn't open this lesson: ${(e as Error).message}`));
+    host.replaceChildren(el("p", {}, el("a", { href: "#lessons", class: "back-link" }, tr().allLessons)),
+      el("p", {}, tr().couldntOpen((e as Error).message)));
     return;
   }
   if (view?.lesson.id !== id) {
@@ -549,6 +553,8 @@ export function showLessons(rest: string[]): void {
   void refreshList();
 }
 
+export const lessonRecording = (): boolean => recording !== undefined;
+
 export function initLessons(c: typeof ctx): void {
   ctx = c;
   $("lesson-record").addEventListener("click", () => void (recording ? stopRecording() : startRecording()));
@@ -557,12 +563,12 @@ export function initLessons(c: typeof ctx): void {
     const file = input.files?.[0];
     if (!file) return;
     const status = $("lesson-status");
-    status.textContent = `Uploading ${file.name}…`;
+    status.textContent = tr().uploading(file.name);
     try {
       await api.uploadLesson(file);
-      status.textContent = "Uploaded. Platina is analyzing it; the progress bar below shows how far it is.";
+      status.textContent = tr().uploaded;
     } catch (err) {
-      status.textContent = `Couldn't use this file: ${(err as Error).message}`;
+      status.textContent = tr().couldntUseFile((err as Error).message);
     }
     input.value = "";
     void refreshList();

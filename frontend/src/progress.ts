@@ -4,6 +4,7 @@
 
 import * as api from "./api";
 import type { Progress, ProgressLesson, WordProgress } from "./api";
+import { locale, tr } from "./i18n";
 import { dateOf, minutes } from "./lessons";
 import { el } from "./render";
 
@@ -17,26 +18,26 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
 }
 
 function shortDate(ts: number): string {
-  return new Date(ts * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return new Date(ts * 1000).toLocaleDateString(locale(), { day: "numeric", month: "short" });
 }
 
 function headline(p: Progress): HTMLElement {
   const card = (value: string, label: string, note: string) =>
     el("div", { class: "stat" }, el("span", { class: "stat-value" }, value), el("span", { class: "stat-label" }, label),
       el("span", { class: "stat-note" }, note));
+  const d = tr();
   const minMin = Math.round(p.min_speaking_s / 60);
   return el("div", { class: "stats" },
-    card(p.current_level === null ? "—" : String(Math.round(p.current_level)), "Your level",
-      p.current_level === null
-        ? `Appears after a lesson with at least ${p.min_judged} judged phrases and ${minMin} minutes of your speech.`
-        : "Average of your last 3 counted lessons."),
-    card(p.change === null ? "—" : `${p.change >= 0 ? "+" : "−"}${Math.abs(Math.round(p.change))}`, "Change",
-      p.change === null ? "Shown once 4 lessons count." : "Since your first 3 counted lessons."),
-    card(minutes(p.speaking_s), "You've spoken", `In ${p.lessons.length} lesson${p.lessons.length === 1 ? "" : "s"}.`));
+    card(p.current_level === null ? "—" : String(Math.round(p.current_level)), d.yourLevel,
+      p.current_level === null ? d.levelAppears(p.min_judged, minMin) : d.levelAverage),
+    card(p.change === null ? "—" : `${p.change >= 0 ? "+" : "−"}${Math.abs(Math.round(p.change))}`, d.change,
+      p.change === null ? d.changeLater : d.changeSince),
+    card(minutes(p.speaking_s), d.youveSpoken, d.inLessons(p.lessons.length)));
 }
 
 /** Level per lesson with its likely range; short lessons hollow and grey. */
 function chart(lessons: ProgressLesson[]): HTMLElement {
+  const d = tr();
   const W = 720, H = 240, L = 40, R = 16, T = 14, B = 30;
   const n = lessons.length;
   const x = (i: number) => (n === 1 ? (L + W - R) / 2 : L + (i / (n - 1)) * (W - L - R));
@@ -45,7 +46,7 @@ function chart(lessons: ProgressLesson[]): HTMLElement {
   const y = (v: number) => T + (1 - (v - yMin) / (100 - yMin)) * (H - T - B);
 
   const box = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
-    "aria-label": "Your level in each lesson. The same numbers are in the table below." });
+    "aria-label": d.chartAria });
   for (let v = yMin; v <= 100; v += 10) {
     box.append(svg("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "grid" }),
       svg("text", { x: L - 6, y: y(v) + 4, class: "tick", "text-anchor": "end" }, String(v)));
@@ -57,9 +58,8 @@ function chart(lessons: ProgressLesson[]): HTMLElement {
   const every = Math.max(1, Math.ceil(n / 10));
   lessons.forEach((s, i) => {
     const g = svg("g", { class: s.reliable ? "point" : "point short" });
-    g.append(svg("title", {}, `${dateOf(s.created_at)} · ${s.title} · level ${Math.round(s.level)}` +
-      ` (likely ${Math.round(s.level_range[0])}–${Math.round(s.level_range[1])}) · ${s.judged} phrases judged` +
-      (s.reliable ? "" : " · too short to count")));
+    g.append(svg("title", {}, d.pointTitle(dateOf(s.created_at), s.title, Math.round(s.level),
+      Math.round(s.level_range[0]), Math.round(s.level_range[1]), s.judged, s.reliable)));
     if (s.reliable) g.append(svg("line", { x1: x(i), x2: x(i), y1: y(s.level_range[0]), y2: y(s.level_range[1]), class: "whisker" }));
     g.append(svg("circle", { cx: x(i), cy: y(s.level), r: 5 }));
     g.addEventListener("click", () => (location.hash = `#lessons/${s.id}`));
@@ -72,20 +72,20 @@ function chart(lessons: ProgressLesson[]): HTMLElement {
   // how much you spoke, on the same lesson axis
   const SH = 70;
   const most = Math.max(...lessons.map((s) => s.speaking_s), 60);
-  const bars = svg("svg", { viewBox: `0 0 ${W} ${SH}`, role: "img", "aria-label": "Minutes you spoke in each lesson." });
+  const bars = svg("svg", { viewBox: `0 0 ${W} ${SH}`, role: "img", "aria-label": d.barsAria });
   const bw = Math.min(24, (W - L - R) / Math.max(n, 1) * 0.6);
   lessons.forEach((s, i) => {
     const h = (s.speaking_s / most) * (SH - 18);
     bars.append(svg("rect", { x: x(i) - bw / 2, y: SH - 4 - h, width: bw, height: Math.max(h, 1),
       class: s.reliable ? "bar" : "bar short" }));
   });
-  bars.append(svg("text", { x: L - 6, y: 12, class: "tick", "text-anchor": "end" }, `${Math.round(most / 60)}m`));
+  bars.append(svg("text", { x: L - 6, y: 12, class: "tick", "text-anchor": "end" }, d.minutesShort(Math.round(most / 60))));
 
   const legend = el("div", { class: "legend" },
-    el("span", { class: "key counted" }, "counted lesson (line: likely range)"),
-    el("span", { class: "key short" }, "too short to count"));
+    el("span", { class: "key counted" }, d.countedKey),
+    el("span", { class: "key short" }, d.tooShort));
   return el("figure", { class: "chart progress-chart" }, legend, box,
-    el("figcaption", { class: "muted" }, "Minutes you spoke in each lesson"), bars, table(lessons));
+    el("figcaption", { class: "muted" }, d.spokeCaption), bars, table(lessons));
 }
 
 function pct(c: number, n: number): string {
@@ -93,9 +93,9 @@ function pct(c: number, n: number): string {
 }
 
 function table(lessons: ProgressLesson[]): HTMLElement {
+  const d = tr();
   const t = el("table", {},
-    el("thead", {}, el("tr", {}, ...["Lesson", "Level", "Likely range", "Correct", "Judged phrases", "You spoke", "Counted"]
-      .map((h) => el("th", {}, h)))));
+    el("thead", {}, el("tr", {}, ...d.progressHeaders.map((h) => el("th", {}, h)))));
   const body = el("tbody");
   for (const s of [...lessons].reverse()) {
     body.append(el("tr", {},
@@ -105,10 +105,10 @@ function table(lessons: ProgressLesson[]): HTMLElement {
       el("td", {}, s.accuracy === null ? "—" : `${Math.round(s.accuracy * 100)} %`),
       el("td", {}, String(s.judged)),
       el("td", {}, minutes(s.speaking_s)),
-      el("td", {}, s.reliable ? "yes" : "no, too short")));
+      el("td", {}, s.reliable ? d.yes : d.noTooShort)));
   }
   t.append(body);
-  return el("details", {}, el("summary", {}, "Show as table"), t);
+  return el("details", {}, el("summary", {}, d.showTable), t);
 }
 
 function words(title: string, intro: string, empty: string, list: WordProgress[], fixed = false): HTMLElement {
@@ -120,12 +120,10 @@ function words(title: string, intro: string, empty: string, list: WordProgress[]
   const ul = el("ul");
   for (const w of list) {
     const o = w.last_wrong;
-    const what = fixed
-      ? `wrong ${w.wrong} time${w.wrong === 1 ? "" : "s"} before, right since`
-      : `wrong ${w.wrong} of ${w.total} times, in ${w.lessons} lesson${w.lessons === 1 ? "" : "s"}`;
+    const what = fixed ? tr().wrongBefore(w.wrong) : tr().wrongOf(w.wrong, w.total, w.lessons);
     ul.append(el("li", {},
       el("span", { lang: "ja", class: "word" }, `${w.lemma}（${w.reading}）`), ` — ${what} · `,
-      el("a", { href: `#lessons/${o.lesson}/${o.utterance}/${o.phrase}` }, fixed ? "last mistake" : "latest mistake")));
+      el("a", { href: `#lessons/${o.lesson}/${o.utterance}/${o.phrase}` }, fixed ? tr().lastMistake : tr().latestMistake)));
   }
   box.append(ul);
   return box;
@@ -133,9 +131,9 @@ function words(title: string, intro: string, empty: string, list: WordProgress[]
 
 function kinds(lessons: ProgressLesson[]): HTMLElement {
   const KINDS = ["flat for accented", "accented for flat", "1 mora off", "2+ moras off"];
+  const d = tr();
   const t = el("table", {},
-    el("thead", {}, el("tr", {}, ...["Lesson", "Flat phrases right", "Accented phrases right", "Said flat instead of a drop",
-      "Added a drop to a flat word", "Drop 1 mora off", "Drop 2+ moras off"].map((h) => el("th", {}, h)))));
+    el("thead", {}, el("tr", {}, ...d.kindHeaders.map((h) => el("th", {}, h)))));
   const body = el("tbody");
   for (const s of [...lessons].reverse()) {
     body.append(el("tr", {},
@@ -145,51 +143,42 @@ function kinds(lessons: ProgressLesson[]): HTMLElement {
       ...KINDS.map((k) => el("td", {}, String(s.kinds[k] ?? 0)))));
   }
   t.append(body);
-  return el("details", { class: "kinds" }, el("summary", {}, "By kind of mistake"),
-    el("p", { class: "muted" }, "Which accents give you trouble: flat (平板) words or words with a drop, and what the mistake was."), t);
+  return el("details", { class: "kinds" }, el("summary", {}, d.byKind), el("p", { class: "muted" }, d.byKindIntro), t);
 }
 
 export async function showProgress(): Promise<void> {
+  const d = tr();
   const host = document.getElementById("progress-view")!;
   let p: Progress;
   try {
     p = await api.progress();
   } catch {
-    host.replaceChildren(el("p", { class: "muted" }, "Can't reach Platina. Is it running? Start it with ./start.sh."));
+    host.replaceChildren(el("p", { class: "muted" }, d.cantReach));
     return;
   }
   if (!p.lessons.length) {
-    host.replaceChildren(el("p", {}, "No lessons yet. Record your first one in ", el("a", { href: "#lessons" }, "Lessons"), "."),
-      el("p", { class: "muted" },
-        `A lesson counts in your progress once Platina could judge at least ${p.min_judged} of your phrases ` +
-        `and you spoke for ${Math.round(p.min_speaking_s / 60)} minutes or more.`));
+    host.replaceChildren(
+      el("p", {}, d.noLessonsProgress[0], el("a", { href: "#lessons" }, d.tabLessons), d.noLessonsProgress[1]),
+      el("p", { class: "muted" }, d.countsWhen(p.min_judged, Math.round(p.min_speaking_s / 60))));
     return;
   }
   host.replaceChildren(headline(p));
   if (p.outdated) {
-    const again = el("button", { type: "button", class: "secondary" }, "Re-check them");
+    const again = el("button", { type: "button", class: "secondary" }, d.recheckThem);
     again.addEventListener("click", async () => {
       again.disabled = true;
       const n = await api.reanalyzeLessons();
-      again.replaceWith(el("span", {}, `${n} lesson${n === 1 ? "" : "s"} queued. Progress updates when they're done.`));
+      again.replaceWith(el("span", {}, d.queued(n)));
     });
-    host.append(el("p", { class: "note" },
-      `${p.outdated} lesson${p.outdated === 1 ? " was" : "s were"} analyzed with older NHK accents or an older model, ` +
-      "so they aren't fully comparable. ", again));
+    host.append(el("p", { class: "note" }, d.outdatedLessons(p.outdated), again));
   }
   host.append(
-    el("h3", {}, "Level per lesson"),
+    el("h3", {}, d.levelPerLesson),
     chart(p.lessons),
     el("div", { class: "word-columns" },
-      words("Words to work on", "Wrong in two or more lessons, or three or more times.",
-        "Nothing yet. Words you keep getting wrong show up here.", p.work_on),
-      words("Fixed", "Words you used to get wrong and have said right three times in a row since.",
-        "Nothing yet. Keep going!", p.fixed, true)),
+      words(d.workOn, d.workOnIntro, d.workOnEmpty, p.work_on),
+      words(d.fixed, d.fixedIntro, d.fixedEmpty, p.fixed, true)),
     kinds(p.lessons),
-    el("details", { class: "explain" }, el("summary", {}, "How is the level worked out?"),
-      el("p", {}, "Each lesson's level is the lowest value your share of correctly accented phrases is likely to be. " +
-        "It grows with how much you said: two correct phrases give about 42, 19 of 20 about 80, 285 of 300 about 92. " +
-        "So staying quiet can't score high, and speaking a lot only helps when the accents are right. " +
-        "Only phrases Platina could judge count. Unclear phrases and words whose dictionary accent is unsure don't count either way.")),
+    el("details", { class: "explain" }, el("summary", {}, d.howLevel), el("p", {}, d.progressLevelExplain)),
   );
 }

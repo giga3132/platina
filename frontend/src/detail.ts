@@ -3,7 +3,8 @@
 
 import { speakPhrase } from "./api";
 import type { AnalyzedPhrase, Phrase, Word } from "./api";
-import { CONFIDENCE_LABEL, STATUS_LABEL, btn, el, notationNode, pattern } from "./render";
+import { reason, tr } from "./i18n";
+import { btn, confidenceLabel, el, notationNode, pattern, statusLabel } from "./render";
 import { tutorButton } from "./tutor";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -15,24 +16,20 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
 }
 
 function verdict(p: AnalyzedPhrase): string {
-  const pct = p.p_expected === null ? "" : ` (${Math.round(p.p_expected * 100)}% likely you said the expected accent)`;
+  const d = tr();
+  const pct = p.p_expected === null ? "" : d.likely(Math.round(p.p_expected * 100));
   switch (p.status) {
     case "correct":
-      return p.said_as_one
-        ? "matches, said in one breath with the neighbouring phrase (natives often do)."
-        : `matches the dictionary${pct}.`;
+      return p.said_as_one ? d.vSaidAsOne : d.vMatches(pct);
     case "error":
-      return `your accent sounds different from the dictionary${pct}.`;
+      return d.vError(pct);
     case "unverified":
-      if (p.unclear_reason === "native-variant")
-        return "differs from the dictionary, but many native speakers say it this way too.";
-      return `sounds different, but the dictionary accent itself isn't confirmed — check it in NHK${pct}.`;
+      if (p.unclear_reason === "native-variant") return d.vNativeVariant;
+      return d.vUnconfirmed(pct);
     case "uncertain":
-      if (p.unclear_reason === "alignment")
-        return "the moras that decide this didn't line up well with the audio, so it isn't judged.";
-      if (p.unclear_reason === "unclear")
-        return `no accent was heard clearly enough to call it a mistake${pct}.`;
-      return "couldn't measure the pitch here (devoiced vowels, noise, or the words didn't line up with the audio).";
+      if (p.unclear_reason === "alignment") return d.vAlignment;
+      if (p.unclear_reason === "unclear") return d.vUnclear(pct);
+      return d.vNoPitch;
   }
 }
 
@@ -51,12 +48,13 @@ function pitchChart(p: AnalyzedPhrase): HTMLElement {
   const yMin = lo - pad, yMax = hi + pad;
   const y = (v: number) => T + (1 - (v - yMin) / (yMax - yMin)) * (H - T - B);
 
+  const tx = tr();
   const root = el("figure", { class: "chart" });
   const legend = el("div", { class: "legend" },
-    el("span", { class: "key measured" }, "your pitch (semitones)"),
-    el("span", { class: "key expected" }, "dictionary high/low"),
-    ...(p.expected_contour ? [el("span", { class: "key native" }, "typical native pitch")] : []));
-  const box = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `pitch of ${p.text}` });
+    el("span", { class: "key measured" }, tx.keyMeasured),
+    el("span", { class: "key expected" }, tx.keyExpected),
+    ...(p.expected_contour ? [el("span", { class: "key native" }, tx.keyNative)] : []));
+  const box = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": tx.pitchOf(p.text) });
 
   // recessive grid: semitone lines every 2 st
   for (let v = Math.ceil(yMin / 2) * 2; v <= yMax; v += 2) {
@@ -105,7 +103,8 @@ function pitchChart(p: AnalyzedPhrase): HTMLElement {
     const hit = svg("rect", { x: x(s), y: T, width: Math.max(x(e) - x(s), 6), height: H - T - B + 20, class: "hit" });
     hit.addEventListener("mouseenter", () => {
       const v = p.mora_pitch[i];
-      tip.textContent = `${p.moras[i]}  you: ${v === null ? "unvoiced" : `${v > 0 ? "+" : ""}${v.toFixed(1)} st`}  ·  dictionary: ${exp[i] ? "high" : "low"}`;
+      tip.textContent = tx.tooltip(p.moras[i], v === null ? tx.unvoiced : `${v > 0 ? "+" : ""}${v.toFixed(1)} st`,
+        exp[i] ? tx.high : tx.low);
       tip.hidden = false;
       tip.style.left = `${(x((s + e) / 2) / W) * 100}%`;
     });
@@ -117,26 +116,27 @@ function pitchChart(p: AnalyzedPhrase): HTMLElement {
 
   // table view of the same data
   const table = el("table", {},
-    el("thead", {}, el("tr", {}, el("th", {}, "Mora"), el("th", {}, "Dictionary"), el("th", {}, "Your pitch (semitones)"))));
+    el("thead", {}, el("tr", {}, el("th", {}, tx.mora), el("th", {}, tx.dictionary), el("th", {}, tx.yourPitch))));
   const body = el("tbody");
   p.moras.forEach((m, i) => {
     const v = p.mora_pitch[i];
-    body.append(el("tr", {}, el("td", {}, m), el("td", {}, exp[i] ? "high" : "low"),
+    body.append(el("tr", {}, el("td", {}, m), el("td", {}, exp[i] ? tx.high : tx.low),
       el("td", {}, v === null || v === undefined ? "—" : v.toFixed(1))));
   });
   table.append(body);
-  root.append(el("details", {}, el("summary", {}, "Show as table"), table));
+  root.append(el("details", {}, el("summary", {}, tx.showTable), table));
   return root;
 }
 
 function wordsTable(words: Word[], onFix: (w: Word) => void): HTMLElement {
+  const d = tr();
   const table = el("table", { class: "words" },
-    el("thead", {}, el("tr", {}, el("th", {}, "Word"), el("th", {}, "Dictionary form"), el("th", {}, "Reading"),
-      el("th", {}, "Accent"), el("th", {}, "Source"), el("th", {}))));
+    el("thead", {}, el("tr", {}, el("th", {}, d.word), el("th", {}, d.lemma), el("th", {}, d.reading),
+      el("th", {}, d.accent), el("th", {}, d.source), el("th", {}))));
   const body = el("tbody");
-  const SOURCE = { override: "NHK (checked by you)", unidic: "UniDic", none: "none" };
+  const SOURCE = { override: d.sourceOverride, unidic: "UniDic", none: d.sourceNone };
   for (const w of words) {
-    const fix = btn("Set from NHK", { quiet: true });
+    const fix = btn(d.setFromNhk, { quiet: true });
     fix.addEventListener("click", () => onFix(w));
     const content = !["助詞", "助動詞", "記号"].includes(w.pos);
     body.append(el("tr", {},
@@ -157,11 +157,12 @@ export function renderDetail(
     onReport?: (said: number | null) => Promise<string>;
   },
 ): void {
+  const d = tr();
   host.replaceChildren();
   host.hidden = false;
   const head = el("header", {}, el("h3", {}, p.text));
   if ("status" in p && opts.onPlay && p.mora_times.length) {
-    const play = btn("Play", { play: true, title: "Hear yourself say this phrase" });
+    const play = btn(d.play, { play: true, title: d.hearPhraseYourself });
     const [s] = p.mora_times[0], [, e] = p.mora_times[p.mora_times.length - 1];
     play.addEventListener("click", () => opts.onPlay!(s, e));
     head.append(play);
@@ -171,29 +172,29 @@ export function renderDetail(
   const rows = el("dl", { class: "compare" });
   const hear = (accent: number, title: string) =>
     p.moras.length ? tutorButton("▶", () => speakPhrase(p.moras, accent), title) : "";
-  rows.append(el("dt", {}, "Expected"),
-    el("dd", {}, notationNode(p, p.accent), " ", hear(p.accent, "Hear the expected accent")));
+  rows.append(el("dt", {}, d.expectedRow),
+    el("dd", {}, notationNode(p, p.accent), " ", hear(p.accent, d.hearExpected)));
   const dictAlts = p.alternatives.slice(1).filter((a) => !p.native_variants.includes(a));
   if (dictAlts.length) {
     const alts = el("dd", { class: "alts" });
-    dictAlts.forEach((a) => alts.append(notationNode(p, a), " ", hear(a, "Hear this accent"), " "));
-    rows.append(el("dt", {}, "Also OK"), alts);
+    dictAlts.forEach((a) => alts.append(notationNode(p, a), " ", hear(a, d.hearThisAccent), " "));
+    rows.append(el("dt", {}, d.alsoOk), alts);
   }
   if (p.native_variants.length) {
     const alts = el("dd", { class: "alts" });
-    p.native_variants.forEach((a) => alts.append(notationNode(p, a), " ", hear(a, "Hear this accent"), " "));
-    rows.append(el("dt", {}, "Natives also say"), alts);
+    p.native_variants.forEach((a) => alts.append(notationNode(p, a), " ", hear(a, d.hearThisAccent), " "));
+    rows.append(el("dt", {}, d.nativesAlso), alts);
   }
   if ("status" in p) {
     if (p.observed !== null) {
-      rows.append(el("dt", {}, "You said"), el("dd", {}, notationNode(p, p.observed, p.accent), " ",
-        hear(p.observed, "Hear the accent you used, in the tutor's voice")));
+      rows.append(el("dt", {}, d.youSaidRow), el("dd", {}, notationNode(p, p.observed, p.accent), " ",
+        hear(p.observed, d.hearYourAccent)));
     }
-    host.append(el("p", { class: `verdict s-${p.status}` }, `${STATUS_LABEL[p.status]}: ${verdict(p)}`));
+    host.append(el("p", { class: `verdict s-${p.status}` }, d.verdictLine(statusLabel(p.status), verdict(p))));
   }
   host.append(rows);
-  host.append(el("p", { class: "muted" }, `Expected accent: ${CONFIDENCE_LABEL[p.confidence]}`));
-  if (p.reasons.length) host.append(el("ul", { class: "reasons" }, ...p.reasons.map((r) => el("li", {}, r))));
+  host.append(el("p", { class: "muted" }, d.expectedSource(confidenceLabel(p.confidence))));
+  if (p.reasons.length) host.append(el("ul", { class: "reasons" }, ...p.reasons.map((r) => el("li", {}, reason(r)))));
   if ("status" in p && p.mora_times.length) host.append(pitchChart(p));
   if ("status" in p && opts.onReport && p.moras.length >= 2) host.append(reportBox(p, opts.onReport));
   host.append(wordsTable(p.words, opts.onFix));
@@ -202,26 +203,27 @@ export function renderDetail(
 /** "Wrong verdict?": the user says which accent they really used. Saved
  * as a labelled clip of their voice for evaluating and training the detector. */
 function reportBox(p: AnalyzedPhrase, onReport: (said: number | null) => Promise<string>): HTMLElement {
-  const box = el("details", { class: "report" }, el("summary", {}, "Wrong verdict? Tell Platina what you said"));
+  const d = tr();
+  const box = el("details", { class: "report" }, el("summary", {}, d.wrongVerdict));
   const row = el("div", { class: "controls" });
   const status = el("span", { class: "muted", "aria-live": "polite" });
   const send = async (said: number | null) => {
-    status.textContent = "Saving…";
+    status.textContent = d.saving;
     try {
       status.textContent = await onReport(said);
       row.querySelectorAll("button").forEach((b) => (b.disabled = true));
     } catch (e) {
-      status.textContent = `Couldn't save: ${(e as Error).message}`;
+      status.textContent = d.couldntSave((e as Error).message);
     }
   };
   for (let a = 0; a < p.moras.length; a++) {
-    const b = el("button", { type: "button", class: "secondary", title: "I said this" }, notationNode(p, a));
+    const b = el("button", { type: "button", class: "secondary", title: d.iSaidThis }, notationNode(p, a));
     b.addEventListener("click", () => void send(a));
     row.append(b);
   }
-  const unsure = btn("Not sure", { quiet: true });
+  const unsure = btn(d.notSure, { quiet: true });
   unsure.addEventListener("click", () => void send(null));
   row.append(unsure);
-  box.append(el("p", { class: "muted" }, "I said:"), row, status);
+  box.append(el("p", { class: "muted" }, d.iSaid), row, status);
   return box;
 }

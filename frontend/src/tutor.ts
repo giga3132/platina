@@ -3,6 +3,7 @@
 // explanation instead of failing on each click.
 
 import { TutorUnavailable } from "./api";
+import { tr } from "./i18n";
 import { btn } from "./render";
 
 let current: HTMLAudioElement | undefined;
@@ -11,10 +12,10 @@ const buttons = new Set<HTMLButtonElement>();
 
 function disable(b: HTMLButtonElement): void {
   b.disabled = true;
-  b.title = `Tutor voice unavailable — ${unavailable}`;
+  b.title = tr().tutorUnavailable(unavailable ?? "");
 }
 
-export function tutorButton(label: string, fetchAudio: () => Promise<Blob>, title = "Hear the expected accent"): HTMLButtonElement {
+export function tutorButton(label: string, fetchAudio: () => Promise<Blob>, title = tr().hearExpected): HTMLButtonElement {
   const b = btn(label.replace(/^▶\s*/, ""), { play: true, title });
   b.classList.add("tutor");
   if (unavailable) disable(b);
@@ -32,7 +33,7 @@ export function tutorButton(label: string, fetchAudio: () => Promise<Blob>, titl
         unavailable = e.message;
         buttons.forEach((x) => (x.isConnected ? disable(x) : buttons.delete(x)));
       } else {
-        b.title = `Couldn't play: ${(e as Error).message}`;
+        b.title = tr().couldntPlay((e as Error).message);
       }
     } finally {
       b.classList.remove("busy");

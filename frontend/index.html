@@ -9,22 +9,23 @@
   <body>
     <header class="top">
       <h1>プラチナ <span>Platina</span></h1>
-      <p class="tagline">Japanese pitch-accent coach</p>
-      <nav aria-label="Sections">
+      <p class="tagline" data-i18n="tagline">Japanese pitch-accent coach</p>
+      <button id="lang-toggle" type="button" class="lang-toggle secondary small" data-i18n="langToggle" data-i18n-title="langToggleTitle"></button>
+      <nav aria-label="Sections" data-i18n-aria-label="navSections">
         <div class="nav-group">
-          <span class="nav-label" id="nav-lessons">My lessons</span>
+          <span class="nav-label" id="nav-lessons" data-i18n="navMyLessons">My lessons</span>
           <ul aria-labelledby="nav-lessons">
-            <li><a href="#lessons" data-tab="lessons">Lessons</a></li>
-            <li><a href="#progress" data-tab="progress">Progress</a></li>
+            <li><a href="#lessons" data-tab="lessons" data-i18n="tabLessons">Lessons</a></li>
+            <li><a href="#progress" data-tab="progress" data-i18n="tabProgress">Progress</a></li>
           </ul>
         </div>
         <div class="nav-group workshop">
-          <span class="nav-label" id="nav-workshop">Workshop <span class="nav-hint">one-off recordings and experiments</span></span>
+          <span class="nav-label" id="nav-workshop"><span data-i18n="navWorkshop">Workshop</span> <span class="nav-hint" data-i18n="navWorkshopHint">one-off recordings and experiments</span></span>
           <ul aria-labelledby="nav-workshop">
-            <li><a href="#quick-check" data-tab="quick-check">Quick check</a></li>
-            <li><a href="#type" data-tab="type">Type</a></li>
-            <li><a href="#nhk" data-tab="nhk">My NHK accents</a></li>
-            <li><a href="#practice" data-tab="practice">Practice</a></li>
+            <li><a href="#quick-check" data-tab="quick-check" data-i18n="tabQuickCheck">Quick check</a></li>
+            <li><a href="#type" data-tab="type" data-i18n="tabType">Type</a></li>
+            <li><a href="#nhk" data-tab="nhk" data-i18n="tabNhk">My NHK accents</a></li>
+            <li><a href="#practice" data-tab="practice" data-i18n="tabPractice">Practice</a></li>
           </ul>
         </div>
       </nav>
@@ -34,43 +35,43 @@
       <div class="content">
         <section id="tab-lessons" class="tab">
           <div id="lessons-home">
-            <h2 class="tab-title">Lessons</h2>
-            <p class="intro">
+            <h2 class="tab-title" data-i18n="tabLessons">Lessons</h2>
+            <p class="intro" data-i18n="lessonsIntro">
               Record your class, then review your pitch accent afterwards: your clearest mistakes, the ones you
               repeat, and everything you said. Wear headphones so only your own voice is recorded.
             </p>
             <div class="controls">
-              <button id="lesson-record" class="record" type="button">● Start lesson recording</button>
-              <label class="upload secondary">Upload a recording<input id="lesson-upload" type="file" accept="audio/*,video/mp4,video/webm" hidden /></label>
+              <button id="lesson-record" class="record" type="button" data-i18n="lessonRecord">● Start lesson recording</button>
+              <label class="upload secondary"><span data-i18n="lessonUpload">Upload a recording</span><input id="lesson-upload" type="file" accept="audio/*,video/mp4,video/webm" hidden /></label>
             </div>
             <div id="lesson-live" class="lesson-live" hidden>
               <span id="lesson-timer" class="timer" aria-live="off">0:00</span>
-              <label class="meter-label">Microphone <meter id="lesson-meter" min="0" max="1" value="0"></meter></label>
+              <label class="meter-label"><span data-i18n="microphone">Microphone</span> <meter id="lesson-meter" min="0" max="1" value="0"></meter></label>
               <span id="lesson-saved" class="muted" aria-live="polite"></span>
             </div>
             <p id="lesson-status" class="muted" aria-live="polite"></p>
-            <h2>Your lessons</h2>
+            <h2 data-i18n="yourLessons">Your lessons</h2>
             <ul id="lesson-list" class="lesson-list"></ul>
           </div>
           <div id="lesson-view" hidden></div>
         </section>
 
         <section id="tab-progress" class="tab" hidden>
-          <h2 class="tab-title">Progress</h2>
+          <h2 class="tab-title" data-i18n="tabProgress">Progress</h2>
           <div id="progress-view"></div>
         </section>
 
         <section id="tab-quick-check" class="tab" hidden>
-          <p class="muted">
+          <p class="muted" data-i18n="quickIntro">
             One-off recordings to check a sentence or experiment. They aren't saved and don't count in your lessons or progress.
           </p>
           <div class="controls">
-            <button id="record" class="record" type="button">● Record</button>
+            <button id="record" class="record" type="button" data-i18n="record">● Record</button>
             <span id="timer" class="muted"></span>
-            <label class="upload secondary">Upload audio<input id="upload" type="file" accept="audio/*" hidden /></label>
+            <label class="upload secondary"><span data-i18n="uploadAudio">Upload audio</span><input id="upload" type="file" accept="audio/*" hidden /></label>
           </div>
           <details class="reading">
-            <summary>Reading a known text? Paste it here (optional, more reliable than transcription)</summary>
+            <summary data-i18n="readingSummary">Reading a known text? Paste it here (optional, more reliable than transcription)</summary>
             <textarea id="reading" rows="3" lang="ja" placeholder="例：音を聞いた。"></textarea>
           </details>
           <p id="speak-status" class="muted" aria-live="polite"></p>
@@ -81,32 +82,32 @@
         <section id="tab-type" class="tab" hidden>
           <form id="type-form">
             <textarea id="type-input" rows="3" lang="ja" placeholder="ここに文章を入力してください"></textarea>
-            <button type="submit">Show accents</button>
+            <button type="submit" data-i18n="showAccents">Show accents</button>
           </form>
           <div id="type-results"></div>
         </section>
 
         <section id="tab-nhk" class="tab" hidden>
-          <p><button id="nhk-back" type="button" class="link" hidden>← Back to lesson</button></p>
-          <p class="muted">
+          <p><button id="nhk-back" type="button" class="link" hidden data-i18n="backToLesson">← Back to lesson</button></p>
+          <p class="muted" data-i18n="nhkIntro">
             Accents you checked in the NHK 日本語発音アクセント新辞典 override every other source.
             Enter the dictionary form and its accent number(s); conjugated forms and phrases follow automatically.
           </p>
           <form id="nhk-form" class="form-grid">
-            <label>Dictionary form <input name="lemma" lang="ja" required placeholder="聞く" /></label>
-            <label>Reading <input name="reading" lang="ja" required placeholder="きく" /></label>
-            <label>Accent number(s) <input name="accents" required placeholder="0  or  0,2" /></label>
-            <label>Note <input name="note" placeholder="optional" /></label>
-            <button type="submit">Save</button>
+            <label><span data-i18n="lemma">Dictionary form</span> <input name="lemma" lang="ja" required placeholder="聞く" /></label>
+            <label><span data-i18n="reading">Reading</span> <input name="reading" lang="ja" required placeholder="きく" /></label>
+            <label><span data-i18n="accentNumbers">Accent number(s)</span> <input name="accents" required placeholder="0  or  0,2" data-i18n-placeholder="accentPlaceholder" /></label>
+            <label><span data-i18n="note">Note</span> <input name="note" placeholder="optional" data-i18n-placeholder="optional" /></label>
+            <button type="submit" data-i18n="save">Save</button>
           </form>
           <p id="nhk-status" class="muted" aria-live="polite"></p>
-          <h2>Words to check</h2>
-          <p class="muted">Words from your recordings whose accent the dictionaries disagree on.</p>
+          <h2 data-i18n="wordsToCheck">Words to check</h2>
+          <p class="muted" data-i18n="wordsToCheckIntro">Words from your recordings whose accent the dictionaries disagree on.</p>
           <ul id="to-check" class="to-check"></ul>
-          <h2>Saved</h2>
+          <h2 data-i18n="savedHeading">Saved</h2>
           <table id="nhk-list" class="words"></table>
-          <h2>Accents natives use (to review)</h2>
-          <p class="muted">
+          <h2 data-i18n="variantsTitle">Accents natives use (to review)</h2>
+          <p class="muted" data-i18n="variantsIntro">
             Found in recordings of 100 native speakers but not in the dictionaries. Proposed ones are never
             counted as your mistake (grey). Check them in NHK: approve to accept them, reject to ignore them.
           </p>
@@ -114,7 +115,7 @@
         </section>
 
         <section id="tab-practice" class="tab" hidden>
-          <p class="muted">
+          <p class="muted" data-i18n="practiceIntro">
             Say the sentence with the target accent — sometimes the right one, sometimes a deliberate mistake.
             Keep a take only if it sounds like the target (trust your ear and the tutor, not Platina's verdict).
             These labelled takes measure how often Platina misjudges your voice, and train it.
@@ -122,23 +123,23 @@
           <p id="practice-stats" class="muted"></p>
           <div id="practice-item"></div>
           <div class="controls">
-            <button id="practice-next" type="button" class="secondary">Another sentence</button>
+            <button id="practice-next" type="button" class="secondary" data-i18n="anotherSentence">Another sentence</button>
             <form id="practice-own" class="inline">
-              <input id="practice-text" lang="ja" placeholder="or type your own sentence" />
-              <button type="submit" class="secondary">Use it</button>
+              <input id="practice-text" lang="ja" placeholder="or type your own sentence" data-i18n-placeholder="ownSentence" />
+              <button type="submit" class="secondary" data-i18n="useIt">Use it</button>
             </form>
           </div>
-          <h2>Review native recordings</h2>
-          <p class="muted">Native speakers' phrases that Platina would have flagged. Was it the speaker, Platina, or the dictionary?</p>
-          <button id="review-next" type="button" class="secondary">Start reviewing</button>
+          <h2 data-i18n="reviewTitle">Review native recordings</h2>
+          <p class="muted" data-i18n="reviewIntro">Native speakers' phrases that Platina would have flagged. Was it the speaker, Platina, or the dictionary?</p>
+          <button id="review-next" type="button" class="secondary" data-i18n="startReviewing">Start reviewing</button>
           <div id="review-item"></div>
         </section>
 
         <p class="legend-help muted">
-          <span class="notation"><span class="mora high">ト</span><span class="drop">＼</span></span> pitch drops after this mora ·
-          <span class="notation"><span class="flat">━</span></span> stays high to the end (flat / 平板) ·
-          <span class="sample s-error">red</span> = your accent differs ·
-          <span class="sample s-unverified">grey</span> = dictionary unsure, not counted
+          <span class="notation"><span class="mora high">ト</span><span class="drop">＼</span></span> <span data-i18n="legendDrop">pitch drops after this mora</span> ·
+          <span class="notation"><span class="flat">━</span></span> <span data-i18n="legendFlat">stays high to the end (flat / 平板)</span> ·
+          <span class="sample s-error" data-i18n="legendRed">red</span> <span data-i18n="legendRedText">= your accent differs</span> ·
+          <span class="sample s-unverified" data-i18n="legendGrey">grey</span> <span data-i18n="legendGreyText">= dictionary unsure, not counted</span>
         </p>
         <p id="tutor-credit" class="muted"></p>
       </div>

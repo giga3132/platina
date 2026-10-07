@@ -3,10 +3,11 @@ import "./style.css";
 import * as api from "./api";
 import type { AnalyzeResult, Word } from "./api";
 import { renderDetail } from "./detail";
+import { applyStatic, lang, setLang, tr } from "./i18n";
 import { Clip, Recorder } from "./recorder";
-import { STATUS_LABEL, btn, el, notationNode, phraseRow } from "./render";
-import { initLessons, showLessons } from "./lessons";
-import { initPractice } from "./practice";
+import { btn, el, notationNode, phraseRow, statusLabel } from "./render";
+import { initLessons, lessonRecording, showLessons } from "./lessons";
+import { initPractice, practiceRecording, redrawPractice } from "./practice";
 import { showProgress } from "./progress";
 import { tutorButton } from "./tutor";
 
@@ -16,6 +17,8 @@ const detail = $("detail");
 const recorder = new Recorder();
 let clip: Clip | undefined;
 let last: { audio: Blob; text: string } | undefined;
+let lastResult: AnalyzeResult | undefined;
+let typed: string | undefined;
 const toCheck = new Map<string, Word>();
 
 // --- tabs: "My lessons" (Lessons, Progress) and the Workshop ------------------
@@ -69,7 +72,7 @@ function fixWord(w: Word, returnTo?: string): void {
   (form.elements.namedItem("reading") as HTMLInputElement).value = w.reading;
   const acc = form.elements.namedItem("accents") as HTMLInputElement;
   acc.value = "";
-  acc.placeholder = w.accents.length ? `UniDic says ${w.accents.join(",")}` : "0  or  0,2";
+  acc.placeholder = w.accents.length ? tr().unidicSays(w.accents.join(",")) : tr().accentPlaceholder;
   acc.focus();
 }
 
@@ -84,19 +87,19 @@ recordBtn.addEventListener("click", async () => {
     try {
       await recorder.start();
     } catch (e) {
-      status.textContent = `Microphone unavailable: ${(e as Error).message}`;
+      status.textContent = tr().micUnavailable((e as Error).message);
       return;
     }
-    recordBtn.textContent = "■ Stop";
+    recordBtn.textContent = tr().stop;
     recordBtn.classList.add("on");
-    status.textContent = "Recording… read aloud or just talk.";
+    status.textContent = tr().recordingTalk;
     tick = window.setInterval(() => {
       const s = Math.floor((performance.now() - recorder.startedAt) / 1000);
       $("timer").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
     }, 250);
   } else {
     window.clearInterval(tick);
-    recordBtn.textContent = "● Record";
+    recordBtn.textContent = tr().record;
     recordBtn.classList.remove("on");
     await run(await recorder.stop());
   }
@@ -112,19 +115,21 @@ async function run(audio: Blob): Promise<void> {
   last = { audio, text };
   clip?.dispose();
   clip = new Clip(audio);
-  status.textContent = "Analyzing… (the first run loads the speech models, ~30 s)";
+  status.textContent = tr().analyzing;
   recordBtn.disabled = true;
   try {
     showResults(await api.analyze(audio, text));
     status.textContent = "";
   } catch (e) {
-    status.textContent = `Analysis failed: ${(e as Error).message}`;
+    status.textContent = tr().analysisFailed((e as Error).message);
   } finally {
     recordBtn.disabled = false;
   }
 }
 
 function showResults(res: AnalyzeResult): void {
+  const d = tr();
+  lastResult = res;
   const host = $("results");
   host.replaceChildren();
   detail.hidden = true;
@@ -132,18 +137,18 @@ function showResults(res: AnalyzeResult): void {
   const summary = $("summary");
   summary.replaceChildren();
   if (!total) {
-    summary.append(el("p", { class: "muted" }, "No speech recognized."));
+    summary.append(el("p", { class: "muted" }, d.noSpeech));
     return;
   }
   for (const s of ["correct", "error", "unverified", "uncertain"] as const) {
-    if (res.summary[s]) summary.append(el("span", { class: `count s-${s}` }, `${res.summary[s]} ${STATUS_LABEL[s].toLowerCase()}`));
+    if (res.summary[s]) summary.append(el("span", { class: `count s-${s}` }, d.summaryCount(res.summary[s]!, statusLabel(s))));
   }
 
   for (const u of res.utterances) {
     const block = el("div", { class: "utterance" });
-    const replay = btn("", { play: true, title: "Hear yourself say this sentence" });
+    const replay = btn("", { play: true, title: d.hearSentenceYourself });
     replay.addEventListener("click", () => clip?.play(u.start, u.end));
-    const tutor = tutorButton("▶ Tutor", () => api.speak(u.text), "Hear this sentence with the expected accent");
+    const tutor = tutorButton(d.tutor, () => api.speak(u.text), d.hearSentenceExpected);
     block.append(el("p", { class: "transcript", lang: "ja" }, replay, " ", u.text, " ", tutor));
     const audio = last?.audio;
     block.append(phraseRow(u.phrases, (p) =>
@@ -155,7 +160,7 @@ function showResults(res: AnalyzeResult): void {
             source: "report", text: u.text, phrase_index: u.phrases.indexOf(p), said,
             start: u.start, end: u.end, verdict: p.status,
           });
-          return `Saved — thanks. ${stats.your_phrases} labelled phrases of your voice so far.`;
+          return tr().reportSaved(stats.your_phrases);
         }),
       })));
     host.append(block);
@@ -167,7 +172,7 @@ function showResults(res: AnalyzeResult): void {
     }
   }
   if (last) {
-    const again = el("button", { type: "button", class: "secondary" }, "Re-check this recording");
+    const again = el("button", { type: "button", class: "secondary" }, d.recheckRecording);
     again.addEventListener("click", () => last && void run(last.audio));
     host.append(again);
   }
@@ -175,31 +180,36 @@ function showResults(res: AnalyzeResult): void {
 
 // --- type -------------------------------------------------------------------
 
-$<HTMLFormElement>("type-form").addEventListener("submit", async (e) => {
+$<HTMLFormElement>("type-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const text = $<HTMLTextAreaElement>("type-input").value.trim();
-  if (!text) return;
+  if (text) void showTyped(text);
+});
+
+async function showTyped(text: string): Promise<void> {
+  const d = tr();
+  typed = text;
   const res = await api.expected(text);
   const host = $("type-results");
-  const gold = el("input", { lang: "ja", value: res.notation, "aria-label": "NHK notation" });
-  const save = el("button", { type: "button", class: "secondary" }, "Save as NHK-checked test sentence");
+  const gold = el("input", { lang: "ja", value: res.notation, "aria-label": d.nhkNotation });
+  const save = el("button", { type: "button", class: "secondary" }, d.saveGold);
   const saved = el("span", { class: "muted", "aria-live": "polite" });
   save.addEventListener("click", async () => {
     await api.addGold(res.text, gold.value);
-    saved.textContent = "Added to backend/tests/gold/sentences.yaml";
+    saved.textContent = d.goldAdded;
   });
   host.replaceChildren(
     el("p", { class: "notation-line", lang: "ja" }, res.notation),
     el("div", { class: "controls" },
-      tutorButton("▶ Listen", () => api.speak(res.text)),
-      tutorButton("▶ Slow", () => api.speak(res.text, 0.75))),
+      tutorButton(d.listen, () => api.speak(res.text)),
+      tutorButton(d.slow, () => api.speak(res.text, 0.75))),
     phraseRow(res.phrases, (p) => renderDetail(detail, p, { onFix: fixWord })),
     el("details", { class: "gold" },
-      el("summary", {}, "Checked this sentence in NHK? Save it as a test case"),
-      el("p", { class: "muted" }, "Correct the notation below if NHK differs (＼ after the drop, ━ for flat, spaces between phrases)."),
+      el("summary", {}, d.goldSummary),
+      el("p", { class: "muted" }, d.goldHelp),
       gold, el("div", { class: "controls" }, save, saved)),
   );
-});
+}
 
 // --- NHK overrides -------------------------------------------------------------
 
@@ -209,7 +219,7 @@ $<HTMLFormElement>("nhk-form").addEventListener("submit", async (e) => {
   const data = new FormData(form);
   const accents = String(data.get("accents")).split(/[,\s、]+/).filter(Boolean).map(Number);
   if (!accents.length || accents.some((a) => !Number.isInteger(a) || a < 0)) {
-    $("nhk-status").textContent = "Accent numbers must be whole numbers like 0 or 0,2.";
+    $("nhk-status").textContent = tr().accentsInvalid;
     return;
   }
   await api.putOverride({
@@ -220,18 +230,19 @@ $<HTMLFormElement>("nhk-form").addEventListener("submit", async (e) => {
   });
   toCheck.delete(`${data.get("lemma")}|${data.get("reading")}`);
   form.reset();
-  $("nhk-status").textContent = "Saved. Re-check a recording or text to see it applied.";
+  $("nhk-status").textContent = tr().nhkSaved;
   await refreshOverrides();
 });
 
 async function refreshOverrides(): Promise<void> {
+  const d = tr();
   const list = await api.listOverrides();
   const table = $("nhk-list");
   table.replaceChildren(el("thead", {}, el("tr", {},
-    el("th", {}, "Dictionary form"), el("th", {}, "Reading"), el("th", {}, "Accent"), el("th", {}, "Note"), el("th", {}))));
+    el("th", {}, d.lemma), el("th", {}, d.reading), el("th", {}, d.accent), el("th", {}, d.note), el("th", {}))));
   const body = el("tbody");
   for (const o of list) {
-    const del = btn("Delete", { quiet: true, danger: true });
+    const del = btn(d.delete, { quiet: true, danger: true });
     del.addEventListener("click", async () => {
       await api.deleteOverride(o.lemma, o.reading);
       await refreshOverrides();
@@ -249,15 +260,16 @@ async function refreshOverrides(): Promise<void> {
     b.addEventListener("click", () => fixWord(w));
     ul.append(el("li", {}, b, w.accents.length ? `  UniDic: ${w.accents.join(",")}` : ""));
   }
-  if (!toCheck.size) ul.append(el("li", { class: "muted" }, "Nothing yet — record something first."));
+  if (!toCheck.size) ul.append(el("li", { class: "muted" }, d.nothingYetRecord));
   await refreshVariants();
 }
 
 async function refreshVariants(): Promise<void> {
+  const d = tr();
   const table = $("variant-list");
   const list = await api.listVariants();
   table.replaceChildren(el("thead", {}, el("tr", {},
-    el("th", {}, "Phrase"), el("th", {}, "Natives say"), el("th", {}, "Speakers"), el("th", {}, "Status"), el("th", {}))));
+    el("th", {}, d.phrase), el("th", {}, d.nativesSay), el("th", {}, d.speakers), el("th", {}, d.status), el("th", {}))));
   const body = el("tbody");
   for (const v of list) {
     const [words, reading] = v.key.split("/");
@@ -265,7 +277,7 @@ async function refreshVariants(): Promise<void> {
     const actions = el("td", {});
     for (const status of ["approved", "rejected"] as const) {
       if (v.status === status) continue;
-      const b = btn(status === "approved" ? "Approve" : "Reject", { quiet: true, danger: status === "rejected" });
+      const b = btn(status === "approved" ? d.approve : d.reject, { quiet: true, danger: status === "rejected" });
       b.addEventListener("click", async () => {
         await api.setVariant(v.key, v.accent, status);
         await refreshVariants();
@@ -274,20 +286,46 @@ async function refreshVariants(): Promise<void> {
     }
     body.append(el("tr", {}, el("td", { lang: "ja" }, words.replaceAll("|", "")),
       el("td", { lang: "ja" }, notationNode({ moras }, v.accent)), el("td", {}, `${v.speakers}/${v.total}`),
-      el("td", {}, v.status), actions));
+      el("td", {}, d.variantStatus[v.status] ?? v.status), actions));
   }
-  if (!list.length) body.append(el("tr", {}, el("td", { class: "muted" }, "None yet (tools/mine_variants.py).")));
+  if (!list.length) body.append(el("tr", {}, el("td", { class: "muted" }, d.noVariants)));
   table.append(body);
 }
 
 // --- tutor credit (required by VOICEVOX's terms) ------------------------------
 
-api.tutorCredit().then(
-  (credit) => ($("tutor-credit").textContent = `Tutor voice: ${credit}`),
-  () => {});
+let credit: string | undefined;
+const showCredit = () => credit && ($("tutor-credit").textContent = tr().tutorCredit(credit));
+api.tutorCredit().then((c) => {
+  credit = c;
+  showCredit();
+}, () => {});
+
+// --- language ------------------------------------------------------------------
+// Switching redraws the current view in place; not while recording, so a
+// redraw can't lose the recording's state.
+
+const langToggle = $<HTMLButtonElement>("lang-toggle");
+const recordingNow = () => recorder.recording || lessonRecording() || practiceRecording();
+
+langToggle.addEventListener("click", () => {
+  if (recordingNow()) return;
+  setLang(lang() === "en" ? "ja" : "en");
+  langToggle.lang = lang() === "en" ? "ja" : "en";
+  showCredit();
+  detail.hidden = true;
+  if (lastResult) showResults(lastResult);
+  if (typed) void showTyped(typed);
+  redrawPractice();
+  route();
+});
+// the toggle shows the other language's name; it is greyed out while recording
+window.setInterval(() => (langToggle.disabled = recordingNow()), 500);
 
 // --- start ---------------------------------------------------------------------
 
+applyStatic();
+langToggle.lang = lang() === "en" ? "ja" : "en";
 initLessons({ detail, onFix: (w) => fixWord(w, location.hash) });
 window.addEventListener("hashchange", route);
 route();
