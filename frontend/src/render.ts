@@ -78,3 +78,17 @@ export function phraseRow<T extends Phrase>(phrases: T[], onSelect: (p: T) => vo
   for (const p of phrases) row.append(chip(p, () => onSelect(p)));
   return row;
 }
+
+/** Small inline action button (play, jump, edit…). `play` draws a ▶ icon in
+ * CSS; with an empty label it is icon-only and `title` names it. */
+export function btn(label: string, opts: { play?: boolean; quiet?: boolean; danger?: boolean; title?: string } = {}):
+    HTMLButtonElement {
+  const cls = ["btn-sm", opts.play && "play", opts.quiet && "quiet", opts.danger && "danger", !label && "icon"]
+    .filter(Boolean).join(" ");
+  const b = el("button", { type: "button", class: cls }, label);
+  if (opts.title) {
+    b.title = opts.title;
+    if (!label) b.setAttribute("aria-label", opts.title);
+  }
+  return b;
+}

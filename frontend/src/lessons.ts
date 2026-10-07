@@ -6,7 +6,7 @@ import * as api from "./api";
 import type { AnalyzedPhrase, Lesson, LessonDetail, LessonUtterance, Status, Word } from "./api";
 import { renderDetail } from "./detail";
 import { Clip, Recorder } from "./recorder";
-import { el, notationNode, phraseRow } from "./render";
+import { btn, el, notationNode, phraseRow } from "./render";
 import { tutorButton } from "./tutor";
 
 const PIECE_MS = 15_000; // a crash loses at most this much
@@ -184,7 +184,7 @@ function statusLine(ls: Lesson): HTMLElement {
       if (recording?.id === ls.id) {
         box.append(el("span", { class: "tag live" }, "Recording now"));
       } else {
-        const go = el("button", { type: "button", class: "secondary" }, "Analyze what was saved");
+        const go = btn("Analyze what was saved");
         go.addEventListener("click", async () => {
           go.disabled = true;
           await api.finishLesson(ls.id).catch((e) => alert(`Couldn't: ${(e as Error).message}`));
@@ -203,7 +203,7 @@ function statusLine(ls: Lesson): HTMLElement {
       break;
     }
     case "failed": {
-      const retry = el("button", { type: "button", class: "secondary" }, "Try again");
+      const retry = btn("Try again");
       retry.addEventListener("click", async () => {
         retry.disabled = true;
         await api.retryLesson(ls.id).catch((e) => alert(`Couldn't: ${(e as Error).message}`));
@@ -245,7 +245,7 @@ export async function refreshList(): Promise<void> {
     const meta = [dateOf(ls.created_at)];
     if (ls.duration) meta.push(`${minutes(ls.duration)} recorded`);
     if (ls.summary) meta.push(`you spoke ${minutes(ls.summary.speaking_s)}`);
-    const del = el("button", { type: "button", class: "link danger" }, "Delete");
+    const del = btn("Delete", { quiet: true, danger: true });
     del.setAttribute("aria-label", `Delete ${ls.title}`);
     del.addEventListener("click", async () => {
       if (!confirm(`Delete “${ls.title}”? Its recording and review are removed for good.`)) return;
@@ -293,6 +293,17 @@ function summaryBlock(lesson: LessonDetail): HTMLElement {
   return box;
 }
 
+/** "長島市業に  expected ナガシマシ＼ギョウニ  you said ナガシマシギョウニ━". */
+function mistakeRow(text: string, moras: string[], accent: number, said: number, count?: number): HTMLElement {
+  const phrase = { moras };
+  const row = el("div", { class: "mistake" },
+    el("span", { class: "mistake-text", lang: "ja" }, text),
+    el("span", { class: "pair" }, el("span", { class: "label" }, "expected"), notationNode(phrase, accent)),
+    el("span", { class: "pair said" }, el("span", { class: "label" }, "you said"), notationNode(phrase, said, accent)));
+  if (count) row.append(el("span", { class: "count-badge" }, `${count}×`));
+  return row;
+}
+
 function obviousBlock(lesson: LessonDetail): HTMLElement {
   const s = lesson.summary!;
   const box = el("section", {}, el("h3", {}, "Most obvious mistakes"));
@@ -303,16 +314,13 @@ function obviousBlock(lesson: LessonDetail): HTMLElement {
   box.append(el("p", { class: "muted" }, "The phrases Platina is surest you said with a different accent."));
   const ol = el("ol", { class: "mistakes" });
   for (const m of s.obvious) {
-    const phrase = { moras: m.moras };
-    const play = el("button", { type: "button", class: "secondary" }, "▶ You");
+    const play = btn("You", { play: true, title: "Hear yourself say it" });
     play.addEventListener("click", () => view?.clip.play(m.start, m.end));
-    const go = el("button", { type: "button", class: "link" }, `Go to ${clock(m.start)}`);
+    const go = btn(`Go to ${clock(m.start)}`, { quiet: true, title: "Show this line in the transcript" });
     go.addEventListener("click", () => focusPhrase(m.utterance, m.phrase));
-    ol.append(el("li", {},
-      el("span", { class: "mistake-text", lang: "ja" }, m.text), " ",
-      el("span", { class: "label" }, "expected "), notationNode(phrase, m.accent), " ",
-      el("span", { class: "label" }, "you said "), notationNode(phrase, m.said, m.accent), " ",
-      play, " ", tutorButton("▶ Expected", () => api.speakPhrase(m.moras, m.accent), "Hear the expected accent"), " ", go));
+    ol.append(el("li", {}, mistakeRow(m.text, m.moras, m.accent, m.said),
+      el("div", { class: "actions" }, play,
+        tutorButton("Expected", () => api.speakPhrase(m.moras, m.accent), "Hear the expected accent"), go)));
   }
   box.append(ol);
   return box;
@@ -327,23 +335,18 @@ function repeatedBlock(lesson: LessonDetail): HTMLElement {
   }
   const ul = el("ul", { class: "mistakes" });
   for (const r of s.repeated) {
-    const phrase = { moras: r.moras };
-    const each = el("ul", { class: "occurrences" });
+    const each = el("div", { class: "occurrences" });
     for (const o of r.occurrences) {
-      const play = el("button", { type: "button", class: "secondary" }, `▶ ${clock(o.start)}`);
-      play.setAttribute("aria-label", `Play at ${clock(o.start)}`);
+      const play = btn(clock(o.start), { play: true, title: `Hear yourself at ${clock(o.start)}` });
       play.addEventListener("click", () => view?.clip.play(o.start, o.end));
-      const go = el("button", { type: "button", class: "link" }, "Go to line");
+      const go = btn("Go to line", { quiet: true });
       go.addEventListener("click", () => focusPhrase(o.utterance, o.phrase));
-      each.append(el("li", {}, play, " ", go));
+      each.append(el("span", { class: "occurrence" }, play, go));
     }
-    ul.append(el("li", {},
-      el("span", { class: "mistake-text", lang: "ja" }, r.text), " · ",
-      el("span", { class: "label" }, "you said "), notationNode(phrase, r.said, r.accent), " ",
-      el("span", { class: "label" }, "expected "), notationNode(phrase, r.accent), " · ",
-      el("strong", {}, `${r.count} times`), " ",
-      tutorButton("▶ Expected", () => api.speakPhrase(r.moras, r.accent), "Hear the expected accent"),
-      el("details", {}, el("summary", {}, "Show each time"), each)));
+    ul.append(el("li", {}, mistakeRow(r.text, r.moras, r.accent, r.said, r.count),
+      el("div", { class: "actions" },
+        tutorButton("Expected", () => api.speakPhrase(r.moras, r.accent), "Hear the expected accent")),
+      el("details", { class: "each" }, el("summary", {}, "Hear each time"), each)));
   }
   box.append(ul);
   return box;
@@ -351,20 +354,19 @@ function repeatedBlock(lesson: LessonDetail): HTMLElement {
 
 function utteranceBlock(lesson: LessonDetail, u: LessonUtterance): HTMLElement {
   const block = el("div", { class: "utterance", "data-idx": String(u.idx) });
-  const play = el("button", { type: "button", class: "link time" }, `▶ ${clock(u.start)}`);
-  play.setAttribute("aria-label", `Play from ${clock(u.start)}`);
-  play.addEventListener("click", () => view?.clip.play(u.start, u.end));
-  const text = el("span", { lang: "ja" }, u.text || "…");
-  const line = el("p", { class: "transcript" }, play, " ", text);
+  const play = btn(clock(u.start), { play: true, quiet: true, title: `Hear this line (${clock(u.start)})` });
+  play.classList.add("time");
+  play.addEventListener("click", () => view?.clip.play(u.start, u.end, 0.1, 0.3));
+  const line = el("div", { class: "transcript" }, play, el("span", { class: "line-text", lang: "ja" }, u.text || "…"));
   if (u.skipped) {
-    line.append(" ", el("span", { class: "muted" }, `(${u.skipped === "not Japanese" ? "not Japanese" : "no speech"} — not judged)`));
+    line.append(el("span", { class: "tag" }, u.skipped === "not Japanese" ? "not Japanese, not judged" : "no speech, not judged"));
   }
-  const fix = el("button", { type: "button", class: "link" }, "✎ Fix text");
-  fix.setAttribute("aria-label", `Fix the text of the line at ${clock(u.start)}`);
+  if (u.edited) line.append(el("span", { class: "tag" }, "text fixed by you"));
+  const fix = btn("Edit text", { quiet: true, title: "The transcript is wrong? Type what you said" });
   fix.addEventListener("click", () => editLine(line, u));
-  line.append(" ", fix);
-  if (u.result) line.append(" ", tutorButton("▶ Tutor", () => api.speak(u.text), "Hear this line with the expected accent"));
-  if (u.edited) line.append(" ", el("span", { class: "tag" }, "text fixed by you"));
+  const actions = el("span", { class: "actions" }, fix);
+  if (u.result) actions.append(tutorButton("Tutor", () => api.speak(u.text), "Hear this line with the expected accent"));
+  line.append(actions);
   block.append(line);
   if (u.result) {
     block.append(phraseRow(u.result.phrases, (p: AnalyzedPhrase) =>
@@ -387,6 +389,8 @@ function editLine(line: HTMLElement, u: LessonUtterance): void {
   const input = el("input", { lang: "ja", value: u.text, "aria-label": "Corrected text of this line" });
   const save = el("button", { type: "submit" }, "Save and re-check");
   const cancel = el("button", { type: "button", class: "secondary" }, "Cancel");
+  save.classList.add("small");
+  cancel.classList.add("small");
   const status = el("span", { class: "muted", "aria-live": "polite" });
   const form = el("form", { class: "fix-line" }, input, save, cancel, status);
   cancel.addEventListener("click", () => form.replaceWith(line));
@@ -416,7 +420,7 @@ function transcriptBlock(lesson: LessonDetail): HTMLElement {
   const filters = el("div", { class: "filters", role: "group", "aria-label": "Show" });
   const options: [Filter, string][] = [["all", "All lines"], ["error", "Lines with mistakes"], ["uncertain", "Lines with unclear phrases"]];
   for (const [f, label] of options) {
-    const b = el("button", { type: "button", class: "secondary filter", "aria-pressed": String(view!.filter === f) }, label);
+    const b = el("button", { type: "button", class: "filter", "aria-pressed": String(view!.filter === f) }, label);
     b.addEventListener("click", () => {
       view!.filter = f;
       filters.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
@@ -482,7 +486,7 @@ function renderLesson(): void {
   const meta = [dateOf(lesson.created_at)];
   if (lesson.duration) meta.push(`${minutes(lesson.duration)} recorded`);
   host.replaceChildren(
-    el("p", {}, el("a", { href: "#lessons" }, "← All lessons")),
+    el("p", {}, el("a", { href: "#lessons", class: "back-link" }, "← All lessons")),
     el("h2", { class: "lesson-h" }, title),
     el("p", { class: "muted" }, meta.join(" · ")));
 
@@ -494,7 +498,7 @@ function renderLesson(): void {
     return;
   }
   if (lesson.outdated) {
-    const again = el("button", { type: "button", class: "secondary" }, "Re-check with the current settings");
+    const again = btn("Re-check with the current settings");
     again.addEventListener("click", async () => {
       again.disabled = true;
       await api.reanalyzeLessons();
@@ -516,7 +520,7 @@ async function openLesson(id: string, focus?: [number, number]): Promise<void> {
   try {
     lesson = await api.getLesson(id);
   } catch (e) {
-    host.replaceChildren(el("p", {}, el("a", { href: "#lessons" }, "← All lessons")),
+    host.replaceChildren(el("p", {}, el("a", { href: "#lessons", class: "back-link" }, "← All lessons")),
       el("p", {}, `Couldn't open this lesson: ${(e as Error).message}`));
     return;
   }

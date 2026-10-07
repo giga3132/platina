@@ -41,29 +41,61 @@ export class Recorder {
   }
 }
 
-/** Plays one time range of a recording (a blob, or a URL the server streams). */
+/** Plays one time range of a recording (a blob, or a URL the server streams).
+ * Playback stops by watching the actual position, not a timer: a timer
+ * started before the seek and buffering finish cuts short words off. */
 export class Clip {
   private audio = new Audio();
-  private timer?: number;
+  private stopAt = 0;
+  private raf = 0;
+  private token = 0;
 
   constructor(source: Blob | string) {
     this.audio.src = typeof source === "string" ? source : URL.createObjectURL(source);
-    this.audio.preload = "metadata";
+    this.audio.preload = "auto";
+    // backup for background tabs, where animation frames pause
+    this.audio.addEventListener("timeupdate", () => {
+      if (this.audio.currentTime >= this.stopAt) this.audio.pause();
+    });
   }
 
-  play(start: number, end: number): void {
-    window.clearTimeout(this.timer);
-    const go = () => {
-      this.audio.currentTime = Math.max(0, start - 0.05);
-      void this.audio.play();
-      this.timer = window.setTimeout(() => this.audio.pause(), (end - start + 0.15) * 1000);
+  /** `before`/`after`: extra audio around the range (aligned word edges are tight). */
+  play(start: number, end: number, before = 0.2, after = 0.4): void {
+    const token = ++this.token;
+    cancelAnimationFrame(this.raf);
+    this.audio.pause();
+    const from = Math.max(0, start - before);
+    this.stopAt = end + after;
+    const begin = () => {
+      if (token !== this.token) return; // another clip was asked for meanwhile
+      void this.audio.play().then(() => this.watch(token));
+    };
+    const seek = () => {
+      if (token !== this.token) return;
+      if (Math.abs(this.audio.currentTime - from) < 0.005) return begin();
+      this.audio.addEventListener("seeked", begin, { once: true });
+      this.audio.currentTime = from;
     };
     // a streamed file can only be seeked once its metadata is in
-    if (this.audio.readyState >= HTMLMediaElement.HAVE_METADATA) go();
-    else this.audio.addEventListener("loadedmetadata", go, { once: true });
+    if (this.audio.readyState >= HTMLMediaElement.HAVE_METADATA) seek();
+    else this.audio.addEventListener("loadedmetadata", seek, { once: true });
+  }
+
+  private watch(token: number): void {
+    const tick = () => {
+      if (token !== this.token || this.audio.paused) return;
+      if (this.audio.currentTime >= this.stopAt) {
+        this.audio.pause();
+        return;
+      }
+      this.raf = requestAnimationFrame(tick);
+    };
+    this.raf = requestAnimationFrame(tick);
   }
 
   dispose(): void {
+    this.token++;
+    cancelAnimationFrame(this.raf);
     this.audio.pause();
     if (this.audio.src.startsWith("blob:")) URL.revokeObjectURL(this.audio.src);
   }

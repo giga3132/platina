@@ -3,7 +3,7 @@
 // explanation instead of failing on each click.
 
 import { TutorUnavailable } from "./api";
-import { el } from "./render";
+import { btn } from "./render";
 
 let current: HTMLAudioElement | undefined;
 let unavailable: string | undefined;
@@ -15,7 +15,8 @@ function disable(b: HTMLButtonElement): void {
 }
 
 export function tutorButton(label: string, fetchAudio: () => Promise<Blob>, title = "Hear the expected accent"): HTMLButtonElement {
-  const b = el("button", { type: "button", class: "secondary tutor", title }, label);
+  const b = btn(label.replace(/^▶\s*/, ""), { play: true, title });
+  b.classList.add("tutor");
   if (unavailable) disable(b);
   buttons.add(b);
   b.addEventListener("click", async () => {

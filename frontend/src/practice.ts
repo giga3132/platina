@@ -7,7 +7,7 @@
 import * as api from "./api";
 import type { PracticeItem, ReviewItem } from "./api";
 import { Clip, Recorder } from "./recorder";
-import { el, notationNode } from "./render";
+import { btn, el, notationNode } from "./render";
 import { tutorButton } from "./tutor";
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -83,7 +83,7 @@ async function next(text?: string): Promise<void> {
     status.textContent = "Listen back. Keep it only if it sounds like the target.";
     keep.hidden = false;
   });
-  const play = el("button", { type: "button", class: "secondary" }, "▶ My take");
+  const play = btn("My take", { play: true });
   play.addEventListener("click", () => clip?.play(0, 60));
   const save = el("button", { type: "button" }, "Keep — I said it like the target");
   save.addEventListener("click", async () => {
@@ -98,7 +98,7 @@ async function next(text?: string): Promise<void> {
       status.textContent = `Couldn't save: ${(e as Error).message}`;
     }
   });
-  const skip = el("button", { type: "button", class: "link" }, "Skip");
+  const skip = btn("Skip", { quiet: true });
   skip.addEventListener("click", () => void next());
   keep.append(play, save, skip);
   host.replaceChildren(line, say, el("div", { class: "controls" }, hear, rec), keep, status);
@@ -115,13 +115,13 @@ async function review(): Promise<void> {
   const r = it as ReviewItem;
   const phrase = { moras: r.moras };
   const audio = new Audio(`/api/review/audio/${r.id.split("/").map(encodeURIComponent).join("/")}`);
-  const play = el("button", { type: "button", class: "secondary" }, "▶ Phrase");
+  const play = btn("Phrase", { play: true });
   play.addEventListener("click", () => {
     audio.currentTime = Math.max(0, r.start - 0.1);
     void audio.play();
     window.setTimeout(() => audio.pause(), (r.end - r.start + 0.3) * 1000);
   });
-  const whole = el("button", { type: "button", class: "link" }, "▶ Whole sentence");
+  const whole = btn("Whole sentence", { play: true });
   whole.addEventListener("click", () => {
     audio.currentTime = 0;
     void audio.play();

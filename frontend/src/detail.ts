@@ -3,7 +3,7 @@
 
 import { speakPhrase } from "./api";
 import type { AnalyzedPhrase, Phrase, Word } from "./api";
-import { CONFIDENCE_LABEL, STATUS_LABEL, el, notationNode, pattern } from "./render";
+import { CONFIDENCE_LABEL, STATUS_LABEL, btn, el, notationNode, pattern } from "./render";
 import { tutorButton } from "./tutor";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -136,7 +136,7 @@ function wordsTable(words: Word[], onFix: (w: Word) => void): HTMLElement {
   const body = el("tbody");
   const SOURCE = { override: "NHK (checked by you)", unidic: "UniDic", none: "none" };
   for (const w of words) {
-    const fix = el("button", { type: "button", class: "link" }, "Set from NHK");
+    const fix = btn("Set from NHK", { quiet: true });
     fix.addEventListener("click", () => onFix(w));
     const content = !["助詞", "助動詞", "記号"].includes(w.pos);
     body.append(el("tr", {},
@@ -161,7 +161,7 @@ export function renderDetail(
   host.hidden = false;
   const head = el("header", {}, el("h3", {}, p.text));
   if ("status" in p && opts.onPlay && p.mora_times.length) {
-    const play = el("button", { type: "button", class: "secondary" }, "▶ Play");
+    const play = btn("Play", { play: true, title: "Hear yourself say this phrase" });
     const [s] = p.mora_times[0], [, e] = p.mora_times[p.mora_times.length - 1];
     play.addEventListener("click", () => opts.onPlay!(s, e));
     head.append(play);
@@ -219,7 +219,7 @@ function reportBox(p: AnalyzedPhrase, onReport: (said: number | null) => Promise
     b.addEventListener("click", () => void send(a));
     row.append(b);
   }
-  const unsure = el("button", { type: "button", class: "link" }, "not sure");
+  const unsure = btn("Not sure", { quiet: true });
   unsure.addEventListener("click", () => void send(null));
   row.append(unsure);
   box.append(el("p", { class: "muted" }, "I said:"), row, status);

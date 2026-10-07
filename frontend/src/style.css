@@ -8,6 +8,8 @@
   --text-secondary: #52514e;
   --text-muted: #85837d;
   --accent: #2a78d6;
+  --accent-hover: #1f68c0;
+  --accent-soft: #e6effb;
   --series-1: #2a78d6; /* measured pitch */
   --reference: #85837d; /* expected high/low */
   --error: #c62b2a;
@@ -28,6 +30,8 @@
     --text-secondary: #c3c2b7;
     --text-muted: #8f8d85;
     --accent: #3987e5;
+    --accent-hover: #5a9cec;
+    --accent-soft: #1c2a3d;
     --series-1: #3987e5;
     --reference: #8f8d85;
     --error: #ef6b69;
@@ -54,16 +58,60 @@ button {
   color: #fff;
   border-radius: 8px;
   padding: 0.45em 1em;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
 }
+/* filled (primary) buttons only: phrase chips, filters and small actions have their own states */
+button:where(:not(.secondary, .btn-sm, .phrase, .filter, .link)):hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+button:where(:not(.phrase)):active:not(:disabled) { transform: translateY(1px); }
 button:disabled { opacity: 0.5; cursor: wait; }
 button.secondary, .upload.secondary {
-  background: transparent;
+  background: var(--surface-1);
   color: var(--accent);
-  border: 1px solid var(--accent);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.45em 1em;
   cursor: pointer;
+  transition: background-color 0.12s, border-color 0.12s;
 }
+button.secondary:hover:not(:disabled), .upload.secondary:hover { background: var(--accent-soft); border-color: var(--accent); }
+button.small { padding: 0.25em 0.8em; font-size: 0.9rem; }
+
+/* small inline actions: play, jump, edit… one shape everywhere */
+.btn-sm, button.btn-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.2em 0.75em;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.btn-sm:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.btn-sm.play::before {
+  content: "";
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 0.6em solid var(--accent);
+  border-top: 0.36em solid transparent;
+  border-bottom: 0.36em solid transparent;
+}
+.btn-sm.icon { padding: 0.3em 0.55em 0.3em 0.65em; vertical-align: middle; }
+table .btn-sm { white-space: normal; text-align: left; }
+a.back-link { display: inline-flex; align-items: center; gap: 0.3em; text-decoration: none; font-size: 0.95rem;
+  padding: 0.2em 0.6em 0.2em 0.3em; border-radius: 999px; }
+a.back-link:hover { background: var(--accent-soft); }
+.btn-sm.quiet { background: transparent; border-color: transparent; color: var(--text-secondary); }
+.btn-sm.quiet:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.btn-sm.danger, .btn-sm.danger:hover:not(:disabled) { color: var(--error); }
+.btn-sm.danger:hover:not(:disabled) { background: var(--error-bg); }
 button.link {
   background: none;
   border: none;
@@ -260,7 +308,6 @@ h2 { font-size: 1.1rem; margin-top: 2rem; }
 .gold input { margin: 0.5rem 0; font-size: 1.1rem; }
 
 /* tutor voice */
-button.tutor { padding: 0.15em 0.6em; font-size: 0.9em; }
 button.tutor.busy { opacity: 0.6; cursor: progress; }
 button.tutor:disabled { cursor: not-allowed; }
 
@@ -304,17 +351,57 @@ button.link.danger { color: var(--error); }
 .explain summary, .kinds summary { cursor: pointer; color: var(--text-secondary); }
 .explain p { max-width: 46rem; }
 
-.mistakes { padding-left: 1.4rem; display: grid; gap: 0.6rem; }
-.mistakes .mistake-text { font-size: 1.1rem; }
-.mistakes .label { color: var(--text-muted); font-size: 0.85rem; }
-.mistakes .notation { font-size: 1.15rem; }
-.mistakes button.secondary { padding: 0.15em 0.6em; font-size: 0.9em; }
-.occurrences { list-style: none; padding-left: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; }
+.mistakes { list-style: none; padding: 0; margin: 0.6rem 0; display: grid; gap: 0.5rem; }
+.mistakes > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+}
+.mistake { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1.2rem; }
+.mistake-text { font-size: 1.05rem; font-weight: 600; min-width: 7em; }
+.pair { display: inline-flex; align-items: baseline; gap: 0.45rem; }
+.pair .label { color: var(--text-muted); font-size: 0.8rem; }
+.pair .notation { font-size: 1.15rem; }
+.pair.said .notation { color: var(--error); }
+.count-badge { font-size: 0.8rem; font-weight: 600; color: var(--error); background: var(--error-bg); border-radius: 999px; padding: 0.05em 0.6em; }
+.actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.mistakes details.each { flex-basis: 100%; }
+.mistakes details.each summary { cursor: pointer; color: var(--text-secondary); font-size: 0.85rem; }
+.occurrences { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-top: 0.4rem; }
+.occurrence { display: inline-flex; gap: 0.15rem; }
 
-.filters { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0; }
-.filters button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+/* segmented control */
+.filters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  margin: 0.5rem 0;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.filters button.filter {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 0.3em 1em;
+  font-size: 0.9rem;
+}
+.filters button.filter:hover { background: var(--accent-soft); color: var(--accent); }
+.filters button.filter[aria-pressed="true"] { background: var(--accent); color: #fff; }
 kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 0.35em; font-size: 0.85em; }
-.transcript .time { font-variant-numeric: tabular-nums; margin-right: 0.3rem; }
+.lesson-transcript .transcript { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; }
+.lesson-transcript .line-text { font-size: 1.1rem; }
+.lesson-transcript .transcript .actions { margin-left: auto; }
+.btn-sm.time { font-variant-numeric: tabular-nums; color: var(--text-muted); padding-left: 0.4em; }
 .fix-line { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; }
 .fix-line input { flex: 1 1 20rem; }
 

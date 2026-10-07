@@ -4,7 +4,7 @@ import * as api from "./api";
 import type { AnalyzeResult, Word } from "./api";
 import { renderDetail } from "./detail";
 import { Clip, Recorder } from "./recorder";
-import { STATUS_LABEL, el, notationNode, phraseRow } from "./render";
+import { STATUS_LABEL, btn, el, notationNode, phraseRow } from "./render";
 import { initLessons, showLessons } from "./lessons";
 import { initPractice } from "./practice";
 import { showProgress } from "./progress";
@@ -141,7 +141,7 @@ function showResults(res: AnalyzeResult): void {
 
   for (const u of res.utterances) {
     const block = el("div", { class: "utterance" });
-    const replay = el("button", { type: "button", class: "link" }, "▶");
+    const replay = btn("", { play: true, title: "Hear yourself say this sentence" });
     replay.addEventListener("click", () => clip?.play(u.start, u.end));
     const tutor = tutorButton("▶ Tutor", () => api.speak(u.text), "Hear this sentence with the expected accent");
     block.append(el("p", { class: "transcript", lang: "ja" }, replay, " ", u.text, " ", tutor));
@@ -231,7 +231,7 @@ async function refreshOverrides(): Promise<void> {
     el("th", {}, "Dictionary form"), el("th", {}, "Reading"), el("th", {}, "Accent"), el("th", {}, "Note"), el("th", {}))));
   const body = el("tbody");
   for (const o of list) {
-    const del = el("button", { type: "button", class: "link" }, "Delete");
+    const del = btn("Delete", { quiet: true, danger: true });
     del.addEventListener("click", async () => {
       await api.deleteOverride(o.lemma, o.reading);
       await refreshOverrides();
@@ -244,7 +244,8 @@ async function refreshOverrides(): Promise<void> {
   const ul = $("to-check");
   ul.replaceChildren();
   for (const w of toCheck.values()) {
-    const b = el("button", { type: "button", class: "link", lang: "ja" }, `${w.lemma}（${w.reading}）`);
+    const b = btn(`${w.lemma}（${w.reading}）`, { quiet: true });
+    b.lang = "ja";
     b.addEventListener("click", () => fixWord(w));
     ul.append(el("li", {}, b, w.accents.length ? `  UniDic: ${w.accents.join(",")}` : ""));
   }
@@ -264,7 +265,7 @@ async function refreshVariants(): Promise<void> {
     const actions = el("td", {});
     for (const status of ["approved", "rejected"] as const) {
       if (v.status === status) continue;
-      const b = el("button", { type: "button", class: "link" }, status === "approved" ? "Approve" : "Reject");
+      const b = btn(status === "approved" ? "Approve" : "Reject", { quiet: true, danger: status === "rejected" });
       b.addEventListener("click", async () => {
         await api.setVariant(v.key, v.accent, status);
         await refreshVariants();
