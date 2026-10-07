@@ -243,3 +243,15 @@ h2 { font-size: 1.1rem; margin-top: 2rem; }
 .gold { margin-top: 1.5rem; }
 .gold summary { cursor: pointer; color: var(--text-secondary); }
 .gold input { margin: 0.5rem 0; font-size: 1.1rem; }
+
+/* tutor voice */
+button.tutor { padding: 0.15em 0.6em; font-size: 0.9em; }
+button.tutor.busy { opacity: 0.6; cursor: progress; }
+button.tutor:disabled { cursor: not-allowed; }
+
+/* practice tab */
+.target { background: var(--accent-soft, rgba(80, 120, 255, 0.12)); border-radius: 4px; padding: 0 4px; }
+form.inline { display: inline-flex; gap: 6px; }
+details.report { margin: 12px 0; }
+.native-line { fill: none; stroke: var(--reference); stroke-width: 2; stroke-dasharray: 2 3; opacity: 0.8; }
+.chart .key.native::before { border-top: 2px dotted var(--reference); }

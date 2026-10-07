@@ -81,3 +81,24 @@ def test_api_add_gold(tmp_path, monkeypatch):
     TestClient(main.app).post("/gold", json={"text": "橋を渡る。", "expected": "ハシ＼オ  ワタル━"})
     entries = yaml.safe_load(gold.read_text())
     assert entries[-1] == {"text": "橋を渡る。", "expected": "ハシ＼オ ワタル━", "verified": True}
+
+
+def test_te_iru_can_be_said_as_one_phrase():
+    phrases = analyze_text("本を読んでいます。")
+    yonde = phrases[1]
+    assert yonde.notation == "ヨ＼ンデ"
+    assert yonde.merge_accents == [1]  # ヨ＼ンデイマス: the first drop wins
+
+
+def test_approved_native_variant_is_accepted(tmp_path):
+    from app.accent.variants import VariantStore, phrase_key
+
+    store = VariantStore(tmp_path / "v.sqlite")
+    p = analyze_text("音を聞いた。")[1]
+    key = phrase_key([w.lemma for w in p.words], p.moras)
+    store.propose(key, 1, speakers=12, total=40, examples=["jvs001"])
+    p = analyze_text("音を聞いた。", variants=store)[1]
+    assert p.proposed_variants == [1] and 1 not in p.alternatives
+    store.set_status(key, 1, "approved")
+    p = analyze_text("音を聞いた。", variants=store)[1]
+    assert p.native_variants == [1] and 1 in p.alternatives and p.accent == 0

@@ -90,3 +90,42 @@ def test_pipeline_end_to_end():
         assert p["status"] in {"correct", "error", "uncertain", "unverified"}
         assert len(p["mora_times"]) == len(p["moras"])
     assert res["phrases"][0]["status"] == "correct"
+
+
+def test_devoiced_mora_merges_classes():
+    # 2 moras, only the second voiced: accent 1 vs flat can't be told apart
+    from app.accent.detect import distinguishable, merge_classes
+    obs = np.array([False, True])
+    assert not distinguishable(2, 1, 0, obs)
+    classes, post = merge_classes([[0, 2], [1]], [0.3, 0.7], 2, obs)
+    assert len(classes) == 1 and sorted(classes[0]) == [0, 1, 2] and abs(post[0] - 1) < 1e-9
+
+
+def test_distinguishable_needs_a_voiced_pair_that_differs():
+    from app.accent.detect import distinguishable
+    # 4 moras: accent 2 (LHLL) vs 3 (LHHL) differ only on mora 3
+    assert distinguishable(4, 2, 3, np.array([True, True, True, True]))
+    assert not distinguishable(4, 2, 3, np.array([True, True, False, True]))
+    # accent 2 vs flat with mora 2 devoiced: mora 1 vs 3 still differ (L-L vs L-H)
+    assert distinguishable(4, 2, 0, np.array([True, False, True, True]))
+
+
+def test_unreliable_moras_make_detection_undecided():
+    times, st, spans = contour(1, 2)
+    det = detect_accent(times, st, spans, [False, False], reliable=[False, True])
+    assert det.accent is None
+
+
+def test_error_needs_a_clearly_heard_alternative(monkeypatch):
+    from types import SimpleNamespace
+
+    from app import analyze
+    from app.accent.detect import Detection
+    from app.analyze import _status
+    monkeypatch.setattr(analyze, "_thresholds", lambda: (0.3, 0.02, 0.6))
+    p = SimpleNamespace(alternatives=[0], moras=["ア", "メ", "ガ"], accent=0, confidence="agree")
+    diffuse = Detection(2, 0.4, [[0, 3], [1], [2]], [0.2, 0.4, 0.4])
+    assert _status(p, diffuse, [True] * 3)[0] == "uncertain"
+    clear = Detection(1, 0.9, [[0, 3], [1], [2]], [0.05, 0.9, 0.05])
+    assert _status(p, clear, [True] * 3)[0] == "error"
+    assert _status(p, clear, [True, False, True])[0] == "uncertain"  # deciding mora misaligned

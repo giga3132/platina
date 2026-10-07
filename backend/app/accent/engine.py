@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass, field
 
 from .notation import phrase_notation, pitch_pattern
 from .overrides import OverrideStore
+from .variants import VariantStore, phrase_key
 from .rules import group_phrases, phrase_accents
 from .sources import Morph, openjtalk_morphs, unidic_morphs
 
@@ -42,6 +43,9 @@ class Phrase:
     pitch: list[bool]
     words: list[Word] = field(default_factory=list)
     reasons: list[str] = field(default_factory=list)
+    merge_accents: list[int] = field(default_factory=list)  # accents if said as one phrase with the next
+    native_variants: list[int] = field(default_factory=list)  # approved, also in alternatives
+    proposed_variants: list[int] = field(default_factory=list)  # mined, not yet reviewed
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -63,12 +67,34 @@ def _openjtalk_index(text: str) -> dict[tuple[int, int], tuple[list[int], bool, 
     return index
 
 
-def analyze_text(text: str, overrides: OverrideStore | None = None) -> list[Phrase]:
+# Auxiliary verbs natives often say in one phrase with a preceding て-form,
+# where OpenJTalk's grouping starts a new phrase (食べて|います).
+_AUX_AFTER_TE = {"居る", "いる", "有る", "ある", "置く", "おく", "仕舞う", "しまう", "行く", "いく",
+                 "来る", "くる", "見る", "みる"}
+
+
+def joinable(prev: list[Morph], nxt: list[Morph]) -> bool:
+    """Adjacent phrases natives often say as one accent phrase."""
+    last, first = prev[-1], nxt[0]
+    if last.surface in ("て", "で") and last.pos == "助詞" and first.pos == "動詞" \
+            and first.lemma in _AUX_AFTER_TE:
+        return True
+    # noun + の + noun (日本の首都)
+    return last.surface == "の" and last.pos == "助詞" and first.pos == "名詞" and len(prev) >= 2
+
+
+def analyze_text(text: str, overrides: OverrideStore | None = None,
+                 variants: VariantStore | None = None) -> list[Phrase]:
     morphs = unidic_morphs(text)
     oj = _openjtalk_index(text)
     out: list[Phrase] = []
+    groups = group_phrases(morphs)
 
-    for ph in group_phrases(morphs):
+    def lexeme(m):
+        ov = overrides.lookup(m) if overrides else None
+        return ov if ov is not None else m.accents
+
+    for gi, ph in enumerate(groups):
         words, lex = [], []
         for m in ph:
             ov = overrides.lookup(m) if overrides else None
@@ -110,6 +136,27 @@ def analyze_text(text: str, overrides: OverrideStore | None = None) -> list[Phra
             if reasons:
                 confidence = "uncertain"
 
+        native, proposed = [], []
+        if variants is not None and moras:
+            found = variants.lookup(phrase_key([m.lemma for m in ph], moras))
+            native = [a for a in found["approved"] if a not in accents]
+            proposed = [a for a in found["proposed"] if a not in accents]
+            accents = accents + native
+
+        merge: list[int] = []
+        nxt = groups[gi + 1] if gi + 1 < len(groups) else None
+        if nxt and nxt[0].start == ph[-1].end and joinable(ph, nxt):
+            # Said in one breath, a phrase keeps only its first drop: the
+            # first part's drop if it has one, else the second part's.
+            n1 = len(moras)
+            second, _ = phrase_accents(nxt, [lexeme(m) for m in nxt])
+            n2 = len(_moras(nxt))
+            for a1 in accents:
+                for a2 in second:
+                    m = a1 if 0 < a1 < n1 else (n1 + a2 if 0 < a2 < n2 else 0)
+                    if m not in merge:
+                        merge.append(m)
+
         out.append(Phrase(
             start=ph[0].start, end=ph[-1].end,
             text=text[ph[0].start:ph[-1].end],
@@ -118,6 +165,8 @@ def analyze_text(text: str, overrides: OverrideStore | None = None) -> list[Phra
             notation=phrase_notation(moras, accents[0]),
             pitch=pitch_pattern(len(moras), accents[0]),
             words=words, reasons=reasons,
+            merge_accents=merge,
+            native_variants=native, proposed_variants=proposed,
         ))
     return out
 

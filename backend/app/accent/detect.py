@@ -21,9 +21,11 @@ from pathlib import Path
 
 import numpy as np
 
+from .notation import pitch_pattern
 from .features import boundary_features, mora_levels, possible
 
 MODEL = Path(__file__).with_name("detector_model.joblib")
+MIN_VOICED = 0.3  # a mora with less voiced pitch than this is not evidence
 
 
 @dataclass
@@ -72,11 +74,57 @@ def posterior(p: np.ndarray, ok: np.ndarray, n: int) -> tuple[list[list[int]], l
     return classes, (probs / probs.sum()).tolist()
 
 
+def distinguishable(n: int, a: int, b: int, observable: np.ndarray) -> bool:
+    """Can the audio tell accent a from accent b? Only if some pair of
+    observable moras stands in a different high/low relation under the two
+    patterns (one mora's level alone says nothing: there is no reference)."""
+    pa, pb = pitch_pattern(n, a), pitch_pattern(n, b)
+    idx = [i for i in range(n) if observable[i]]
+    for x in range(len(idx)):
+        for y in range(x + 1, len(idx)):
+            i, j = idx[x], idx[y]
+            if (pa[i] - pa[j]) != (pb[i] - pb[j]):
+                return True
+    return False
+
+
+def class_groups(classes: list[list[int]], n: int, observable: np.ndarray) -> list[int]:
+    """Group id per class; classes the audio can't tell apart share one."""
+    parent = list(range(len(classes)))
+
+    def root(i):
+        while parent[i] != i:
+            i = parent[i]
+        return i
+
+    for i in range(len(classes)):
+        for j in range(i + 1, len(classes)):
+            if root(i) != root(j) and not distinguishable(n, classes[i][0], classes[j][0], observable):
+                parent[root(j)] = root(i)
+    return [root(i) for i in range(len(classes))]
+
+
+def merge_classes(classes: list[list[int]], post: list[float], n: int,
+                  observable: np.ndarray) -> tuple[list[list[int]], list[float]]:
+    """Merge accent classes the audio can't tell apart (devoiced or
+    unaligned moras, a final boundary rise), summing their probability, so
+    a verdict never rests on moras that weren't measured."""
+    groups: dict[int, tuple[list[int], float]] = {}
+    for g, cls, p in zip(class_groups(classes, n, observable), classes, post):
+        accs, total = groups.get(g, ([], 0.0))
+        groups[g] = (accs + cls, total + p)
+    merged = sorted(groups.values(), key=lambda g: -g[1])
+    return [g[0] for g in merged], [g[1] for g in merged]
+
+
 def detect_accent(times: np.ndarray, st: np.ndarray, spans: list[tuple[float, float]],
-                  special: list[bool] | None = None, final: bool = False) -> Detection:
+                  special: list[bool] | None = None, final: bool = False,
+                  reliable: list[bool] | None = None, merge: bool = True) -> Detection:
     """times/st: the recording's pitch track (semitones, NaN = unvoiced);
     spans: (start, end) of each mora; special: syllable tails
-    (kana.special_moras); final: the phrase ends the sentence."""
+    (kana.special_moras); final: the phrase ends the sentence;
+    reliable: per mora, False where its pitch must not count as evidence
+    (badly aligned, or a final boundary rise)."""
     n = len(spans)
     special = special or [False] * n
     if n < 2:
@@ -87,5 +135,12 @@ def detect_accent(times: np.ndarray, st: np.ndarray, spans: list[tuple[float, fl
     ok = possible(n, special)
     p = boundary_probs(boundary_features(levels, voiced, special, final))
     classes, post = posterior(p, ok, n)
+    if merge:
+        observable = voiced >= MIN_VOICED
+        if reliable is not None:
+            observable &= np.asarray(reliable, dtype=bool)
+        classes, post = merge_classes(classes, post, n, observable)
     best = int(np.argmax(post))
+    if len(classes) == 1:  # nothing can be told apart
+        return Detection(None, 0.0, classes, post)
     return Detection(classes[best][0], post[best], classes, post)

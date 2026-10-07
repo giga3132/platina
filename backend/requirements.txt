@@ -16,7 +16,9 @@ torch
 transformers
 praat-parselmouth
 silero-vad
-scikit-learn==1.9.1  # must match the version that trained app/accent/detector_model.joblib
+scikit-learn==1.9.1  # must match the version that trained detector_model.joblib / contour_model.joblib
 joblib
+soundfile        # FLAC corpora and labelled clips
+torchfcpe        # optional neural pitch tracker (PLATINA_F0=fcpe)
 
 pytest

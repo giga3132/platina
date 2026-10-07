@@ -4,7 +4,9 @@ import * as api from "./api";
 import type { AnalyzeResult, Word } from "./api";
 import { renderDetail } from "./detail";
 import { Clip, Recorder } from "./recorder";
-import { STATUS_LABEL, el, phraseRow } from "./render";
+import { STATUS_LABEL, el, notationNode, phraseRow } from "./render";
+import { initPractice } from "./practice";
+import { tutorButton } from "./tutor";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -22,6 +24,7 @@ function showTab(name: string): void {
   document.querySelectorAll<HTMLElement>(".tab").forEach((s) => (s.hidden = s.id !== `tab-${name}`));
   detail.hidden = true;
   if (name === "nhk") void refreshOverrides();
+  if (name === "practice") void initPractice();
 }
 document.querySelectorAll<HTMLElement>("[role=tab]").forEach((b) =>
   b.addEventListener("click", () => showTab(b.dataset.tab!)));
@@ -107,9 +110,21 @@ function showResults(res: AnalyzeResult): void {
     const block = el("div", { class: "utterance" });
     const replay = el("button", { type: "button", class: "link" }, "▶");
     replay.addEventListener("click", () => clip?.play(u.start, u.end));
-    block.append(el("p", { class: "transcript", lang: "ja" }, replay, " ", u.text));
+    const tutor = tutorButton("▶ Tutor", () => api.speak(u.text), "Hear this sentence with the expected accent");
+    block.append(el("p", { class: "transcript", lang: "ja" }, replay, " ", u.text, " ", tutor));
+    const audio = last?.audio;
     block.append(phraseRow(u.phrases, (p) =>
-      renderDetail(detail, p, { onFix: fixWord, onPlay: (s, e) => clip?.play(s, e) })));
+      renderDetail(detail, p, {
+        onFix: fixWord,
+        onPlay: (s, e) => clip?.play(s, e),
+        onReport: audio && (async (said) => {
+          const stats = await api.addLabel(audio, {
+            source: "report", text: u.text, phrase_index: u.phrases.indexOf(p), said,
+            start: u.start, end: u.end, verdict: p.status,
+          });
+          return `Saved — thanks. ${stats.your_phrases} labelled phrases of your voice so far.`;
+        }),
+      })));
     host.append(block);
     for (const p of u.phrases) {
       if (p.confidence !== "uncertain") continue;
@@ -142,6 +157,9 @@ $<HTMLFormElement>("type-form").addEventListener("submit", async (e) => {
   });
   host.replaceChildren(
     el("p", { class: "notation-line", lang: "ja" }, res.notation),
+    el("div", { class: "controls" },
+      tutorButton("▶ Listen", () => api.speak(res.text)),
+      tutorButton("▶ Slow", () => api.speak(res.text, 0.75))),
     phraseRow(res.phrases, (p) => renderDetail(detail, p, { onFix: fixWord })),
     el("details", { class: "gold" },
       el("summary", {}, "Checked this sentence in NHK? Save it as a test case"),
@@ -198,4 +216,38 @@ async function refreshOverrides(): Promise<void> {
     ul.append(el("li", {}, b, w.accents.length ? `  UniDic: ${w.accents.join(",")}` : ""));
   }
   if (!toCheck.size) ul.append(el("li", { class: "muted" }, "Nothing yet — record something first."));
+  await refreshVariants();
 }
+
+async function refreshVariants(): Promise<void> {
+  const table = $("variant-list");
+  const list = await api.listVariants();
+  table.replaceChildren(el("thead", {}, el("tr", {},
+    el("th", {}, "Phrase"), el("th", {}, "Natives say"), el("th", {}, "Speakers"), el("th", {}, "Status"), el("th", {}))));
+  const body = el("tbody");
+  for (const v of list) {
+    const [words, reading] = v.key.split("/");
+    const moras = Array.from(reading.matchAll(/.[ャュョァィゥェォ]?/g), (m) => m[0]);
+    const actions = el("td", {});
+    for (const status of ["approved", "rejected"] as const) {
+      if (v.status === status) continue;
+      const b = el("button", { type: "button", class: "link" }, status === "approved" ? "Approve" : "Reject");
+      b.addEventListener("click", async () => {
+        await api.setVariant(v.key, v.accent, status);
+        await refreshVariants();
+      });
+      actions.append(b, " ");
+    }
+    body.append(el("tr", {}, el("td", { lang: "ja" }, words.replaceAll("|", "")),
+      el("td", { lang: "ja" }, notationNode({ moras }, v.accent)), el("td", {}, `${v.speakers}/${v.total}`),
+      el("td", {}, v.status), actions));
+  }
+  if (!list.length) body.append(el("tr", {}, el("td", { class: "muted" }, "None yet (tools/mine_variants.py).")));
+  table.append(body);
+}
+
+// --- tutor credit (required by VOICEVOX's terms) ------------------------------
+
+api.tutorCredit().then(
+  (credit) => ($("tutor-credit").textContent = `Tutor voice: ${credit}`),
+  () => {});

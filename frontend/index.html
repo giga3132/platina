@@ -13,6 +13,7 @@
         <button role="tab" data-tab="speak" aria-selected="true">Speak</button>
         <button role="tab" data-tab="type" aria-selected="false">Type</button>
         <button role="tab" data-tab="nhk" aria-selected="false">My NHK accents</button>
+        <button role="tab" data-tab="practice" aria-selected="false">Practice</button>
       </nav>
     </header>
 
@@ -59,6 +60,33 @@
           <ul id="to-check" class="to-check"></ul>
           <h2>Saved</h2>
           <table id="nhk-list" class="words"></table>
+          <h2>Accents natives use (to review)</h2>
+          <p class="muted">
+            Found in recordings of 100 native speakers but not in the dictionaries. Proposed ones are never
+            counted as your mistake (grey). Check them in NHK: approve to accept them, reject to ignore them.
+          </p>
+          <table id="variant-list" class="words"></table>
+        </section>
+
+        <section id="tab-practice" class="tab" hidden>
+          <p class="muted">
+            Say the sentence with the target accent — sometimes the right one, sometimes a deliberate mistake.
+            Keep a take only if it sounds like the target (trust your ear and the tutor, not Platina's verdict).
+            These labelled takes measure how often Platina misjudges your voice, and train it.
+          </p>
+          <p id="practice-stats" class="muted"></p>
+          <div id="practice-item"></div>
+          <div class="controls">
+            <button id="practice-next" type="button" class="secondary">Another sentence</button>
+            <form id="practice-own" class="inline">
+              <input id="practice-text" lang="ja" placeholder="or type your own sentence" />
+              <button type="submit" class="secondary">Use it</button>
+            </form>
+          </div>
+          <h2>Review native recordings</h2>
+          <p class="muted">Native speakers' phrases that Platina would have flagged. Was it the speaker, Platina, or the dictionary?</p>
+          <button id="review-next" type="button" class="secondary">Start reviewing</button>
+          <div id="review-item"></div>
         </section>
 
         <p class="legend-help muted">
@@ -67,6 +95,7 @@
           <span class="sample s-error">red</span> = your accent differs ·
           <span class="sample s-unverified">grey</span> = dictionary unsure, not counted
         </p>
+        <p id="tutor-credit" class="muted"></p>
       </div>
 
       <aside id="detail" class="detail" hidden></aside>

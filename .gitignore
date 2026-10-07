@@ -7,3 +7,6 @@ node_modules/
 frontend/dist/
 # Personal NHK-checked accent overrides (not redistributable)
 backend/data/*.sqlite
+# Labelled recordings of your voice, native review queue
+backend/data/recordings/
+backend/data/review.json
