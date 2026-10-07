@@ -176,6 +176,20 @@ main {
 }
 
 .controls { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+
+/* review native recordings: a card, with the listen row and the verdict row clearly apart */
+#review-item:not(:empty) {
+  display: flex; flex-direction: column; gap: 0.75rem;
+  margin-top: 1rem; padding: 1rem 1.1rem;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1);
+}
+#review-item > p { margin: 0; }
+#review-item .controls { gap: 0.5rem; }
+#review-item .answers { padding-top: 0.75rem; border-top: 1px solid var(--border); }
+
+/* NHK saved list: search + the first few rows, the rest on demand */
+.saved-search { max-width: 22rem; margin-bottom: 0.6rem; }
+.saved-more { margin: 0.5rem 0 1.5rem; }
 .record { font-size: 1.1rem; padding: 0.6em 1.4em; border-radius: 999px; }
 .record.on { background: var(--error); border-color: var(--error); }
 .reading { margin: 1rem 0; }

@@ -139,9 +139,9 @@ async function review(): Promise<void> {
     audio.currentTime = 0;
     void audio.play();
   });
-  const answers = el("div", { class: "controls" });
+  const answers = el("div", { class: "controls answers" });
   for (const answer of ["variant", "misheard", "dictionary", "unsure"] as const) {
-    const b = el("button", { type: "button", class: "secondary" }, d.reviewChoices[answer]);
+    const b = el("button", { type: "button", class: "secondary small" }, d.reviewChoices[answer]);
     b.addEventListener("click", async () => {
       await api.reviewAnswer(r.id, answer);
       await review();

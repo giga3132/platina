@@ -234,14 +234,30 @@ $<HTMLFormElement>("nhk-form").addEventListener("submit", async (e) => {
   await refreshOverrides();
 });
 
-async function refreshOverrides(): Promise<void> {
+// the saved list runs to thousands (Anki import): show a few, search or expand for the rest
+const SAVED_SHOWN = 10;
+let saved: api.Override[] = [];
+let savedExpanded = false;
+
+$<HTMLInputElement>("nhk-search").addEventListener("input", () => renderSaved());
+
+const toKatakana = (s: string) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
+
+function renderSaved(): void {
   const d = tr();
-  const list = await api.listOverrides();
+  const q = $<HTMLInputElement>("nhk-search").value.trim();
+  const matches = q
+    ? saved.filter((o) => o.lemma.includes(q) || o.reading.includes(toKatakana(q)) || o.note.includes(q))
+    : saved;
+  const shown = savedExpanded ? matches : matches.slice(0, SAVED_SHOWN);
+  $("nhk-count").textContent = saved.length ? d.savedCount(saved.length) : "";
+  $("nhk-search").hidden = saved.length <= SAVED_SHOWN;
+
   const table = $("nhk-list");
   table.replaceChildren(el("thead", {}, el("tr", {},
     el("th", {}, d.lemma), el("th", {}, d.reading), el("th", {}, d.accent), el("th", {}, d.note), el("th", {}))));
   const body = el("tbody");
-  for (const o of list) {
+  for (const o of shown) {
     const del = btn(d.delete, { quiet: true, danger: true });
     del.addEventListener("click", async () => {
       await api.deleteOverride(o.lemma, o.reading);
@@ -251,6 +267,26 @@ async function refreshOverrides(): Promise<void> {
       el("td", {}, o.accents.map((a) => `[${a}]`).join("")), el("td", {}, o.note), el("td", {}, del)));
   }
   table.append(body);
+  table.hidden = !shown.length;
+
+  const more = $("nhk-more");
+  more.replaceChildren();
+  if (q && !matches.length) more.append(el("span", { class: "muted" }, d.noSavedMatch));
+  else if (matches.length > SAVED_SHOWN) {
+    const toggle = btn(savedExpanded ? d.showFewer : d.showAllSaved(matches.length));
+    toggle.addEventListener("click", () => {
+      savedExpanded = !savedExpanded;
+      renderSaved();
+      if (!savedExpanded) $("nhk-search").scrollIntoView({ block: "nearest" });
+    });
+    more.append(toggle);
+  }
+}
+
+async function refreshOverrides(): Promise<void> {
+  const d = tr();
+  saved = await api.listOverrides();
+  renderSaved();
 
   const ul = $("to-check");
   ul.replaceChildren();

@@ -104,8 +104,11 @@
           <h2 data-i18n="wordsToCheck">Words to check</h2>
           <p class="muted" data-i18n="wordsToCheckIntro">Words from your recordings whose accent the dictionaries disagree on.</p>
           <ul id="to-check" class="to-check"></ul>
-          <h2 data-i18n="savedHeading">Saved</h2>
+          <h2><span data-i18n="savedHeading">Saved</span> <span id="nhk-count" class="muted"></span></h2>
+          <input id="nhk-search" type="search" class="saved-search" lang="ja"
+            placeholder="Search saved words" data-i18n-placeholder="searchSaved" />
           <table id="nhk-list" class="words"></table>
+          <p id="nhk-more" class="saved-more"></p>
           <h2 data-i18n="variantsTitle">Accents natives use (to review)</h2>
           <p class="muted" data-i18n="variantsIntro">
             Found in recordings of 100 native speakers but not in the dictionaries. Proposed ones are never

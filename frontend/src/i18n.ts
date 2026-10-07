@@ -219,6 +219,11 @@ const en = {
   wordsToCheck: "Words to check",
   wordsToCheckIntro: "Words from your recordings whose accent the dictionaries disagree on.",
   savedHeading: "Saved",
+  savedCount: (n: number) => `(${n})`,
+  searchSaved: "Search saved words",
+  showAllSaved: (n: number) => `Show all ${n}`,
+  showFewer: "Show fewer",
+  noSavedMatch: "No saved word matches.",
   variantsTitle: "Accents natives use (to review)",
   variantsIntro: "Found in recordings of 100 native speakers but not in the dictionaries. Proposed ones are never " +
     "counted as your mistake (grey). Check them in NHK: approve to accept them, reject to ignore them.",
@@ -548,6 +553,11 @@ const ja: Dict = {
   wordsToCheck: "要確認の語",
   wordsToCheckIntro: "録音に出てきた語のうち、辞書によってアクセントが異なるものです。",
   savedHeading: "登録済み",
+  savedCount: (n: number) => `（${n}語）`,
+  searchSaved: "登録した語を検索",
+  showAllSaved: (n: number) => `すべて表示（${n}語）`,
+  showFewer: "折りたたむ",
+  noSavedMatch: "該当する語はありません。",
   variantsTitle: "ネイティブが使うアクセント（要確認）",
   variantsIntro: "ネイティブ話者100人の録音で見つかったものの、辞書には載っていないアクセントです。「提案中」のものは" +
     "間違いとして数えません（灰色で表示）。NHKで確認して、正しければ承認、そうでなければ却下してください。",
