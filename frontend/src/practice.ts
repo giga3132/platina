@@ -8,7 +8,7 @@ import * as api from "./api";
 import type { PracticeItem, ReviewItem } from "./api";
 import { kindLabel, tr } from "./i18n";
 import { Clip, Recorder } from "./recorder";
-import { btn, el, notationNode } from "./render";
+import { btn, el, notationNode, segments } from "./render";
 import { tutorButton } from "./tutor";
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -36,7 +36,9 @@ export async function initPractice(): Promise<void> {
     const text = ($("practice-text") as HTMLInputElement).value.trim();
     if (text) void next(text);
   });
-  $("review-next").addEventListener("click", () => void review());
+  // the review loads its next phrase whenever it's opened
+  const show = segments($("practice-views"), $("tab-practice"), (v) => v === "review" && void review());
+  show("takes");
   await Promise.all([next(), refreshStats()]);
 }
 
@@ -54,7 +56,7 @@ async function next(text?: string): Promise<void> {
   try {
     item = await api.practiceNext(text);
   } catch (e) {
-    $("practice-item").replaceChildren(el("p", { class: "muted" }, tr().couldntLoad((e as Error).message)));
+    $("practice-item").replaceChildren(el("p", { class: "empty" }, tr().couldntLoad((e as Error).message)));
     return;
   }
   render(item);
@@ -78,7 +80,7 @@ function render(it: PracticeItem): void {
   const hear = tutorButton(d.hearTarget, () => api.speak(it.text, 1, { [it.speak_index]: it.target }),
     d.hearTargetTitle);
   const rec = el("button", { type: "button", class: "record" }, d.record);
-  const status = el("p", { class: "muted", "aria-live": "polite" });
+  const status = el("p", { class: "status", "aria-live": "polite" });
   const keep = el("div", { class: "controls", hidden: "" });
   rec.addEventListener("click", async () => {
     if (!recorder.recording) {
@@ -122,7 +124,7 @@ async function review(): Promise<void> {
   const host = $("review-item");
   const it = await api.reviewNext();
   if (!("id" in it)) {
-    host.replaceChildren(el("p", { class: "muted" }, d.nothingToReview));
+    host.replaceChildren(el("p", { class: "empty" }, d.nothingToReview));
     return;
   }
   const r = it as ReviewItem;

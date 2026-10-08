@@ -5,7 +5,7 @@ import type { AnalyzeResult, Word } from "./api";
 import { renderDetail } from "./detail";
 import { applyStatic, lang, setLang, tr } from "./i18n";
 import { Clip, Recorder } from "./recorder";
-import { btn, el, notationNode, phraseRow, statusLabel } from "./render";
+import { btn, el, legend, notationNode, phraseRow, segments, statusLabel } from "./render";
 import { initLessons, lessonRecording, showLessons } from "./lessons";
 import { initPractice, practiceRecording, redrawPractice } from "./practice";
 import { showProgress } from "./progress";
@@ -21,21 +21,29 @@ let lastResult: AnalyzeResult | undefined;
 let typed: string | undefined;
 const toCheck = new Map<string, Word>();
 
-// --- tabs: "My lessons" (Lessons, Progress) and the Workshop ------------------
+// --- two spaces: My lessons (Lessons, Progress) and the Workshop ------------
 // Every tab has its own address (#lessons, #progress, #quick-check, ...), so
-// either area can be bookmarked; #lessons/<id> opens one lesson.
+// either space can be bookmarked; #lessons/<id> opens one lesson. The space
+// sets the colours (<html data-space>); switching space plays a short wipe.
 
-const TABS = ["lessons", "progress", "quick-check", "type", "nhk", "practice"] as const;
-type Tab = (typeof TABS)[number];
-const isTab = (t: string): t is Tab => (TABS as readonly string[]).includes(t);
+const SPACE_OF = {
+  lessons: "lessons", progress: "lessons",
+  "quick-check": "workshop", type: "workshop", nhk: "workshop", practice: "workshop",
+} as const;
+type Tab = keyof typeof SPACE_OF;
+type Space = (typeof SPACE_OF)[Tab];
+const isTab = (t: string): t is Tab => Object.hasOwn(SPACE_OF, t);
 const nhkBack = $<HTMLButtonElement>("nhk-back");
+let space: Space | undefined;
+/** Where each space was left this session (an open lesson, too). */
+const lastHash: Partial<Record<Space, string>> = {};
 
-function rememberedTab(): Tab {
+function rememberedTab(s?: Space): Tab {
   try {
-    const t = localStorage.getItem("platina-tab");
-    if (t && isTab(t)) return t;
+    const t = localStorage.getItem(s ? `platina-tab-${s}` : "platina-tab");
+    if (t && isTab(t) && (!s || SPACE_OF[t] === s)) return t;
   } catch { /* storage blocked: default */ }
-  return "lessons";
+  return s === "workshop" ? "quick-check" : "lessons";
 }
 
 function route(): void {
@@ -44,16 +52,42 @@ function route(): void {
     history.replaceState(null, "", `#${rememberedTab()}`);
     return route();
   }
-  showTab(head, rest);
+  if (space && SPACE_OF[head] !== space) wipe(() => showTab(head, rest));
+  else showTab(head, rest);
+}
+
+type TransitionDocument = Document & {
+  startViewTransition?: (update: () => void) => { ready: Promise<void>; finished: Promise<void> };
+};
+
+/** Persona-style colour wipe into the other space: the new page is revealed
+ * behind a slanted edge carrying the new space's colour (style.css). */
+function wipe(update: () => void): void {
+  const doc = document as TransitionDocument;
+  if (!doc.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) return update();
+  const root = document.documentElement;
+  const t = doc.startViewTransition(() => {
+    update();
+    root.classList.add("space-wipe");
+  });
+  t.ready.catch(() => {}); // skipped (another switch came first): the page still updates, just without the wipe
+  void t.finished.finally(() => root.classList.remove("space-wipe"));
 }
 
 function showTab(name: Tab, rest: string[] = []): void {
+  space = SPACE_OF[name];
+  document.documentElement.dataset.space = space;
+  lastHash[space] = [name, ...rest.slice(0, name === "lessons" ? 1 : 0)].map(encodeURIComponent).join("/");
+  document.querySelectorAll<HTMLElement>(".space-switch button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.space === space)));
+  document.querySelectorAll<HTMLElement>(".subnav ul").forEach((u) => (u.hidden = u.dataset.space !== space));
   document.querySelectorAll<HTMLElement>("nav a[data-tab]").forEach((a) =>
     a.dataset.tab === name ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
   document.querySelectorAll<HTMLElement>(".tab").forEach((s) => (s.hidden = s.id !== `tab-${name}`));
   detail.hidden = true;
   try {
     localStorage.setItem("platina-tab", name);
+    localStorage.setItem(`platina-tab-${space}`, name);
   } catch { /* storage blocked: not remembered */ }
   if (name !== "nhk") nhkBack.hidden = true;
   if (name === "nhk") void refreshOverrides();
@@ -137,7 +171,7 @@ function showResults(res: AnalyzeResult): void {
   const summary = $("summary");
   summary.replaceChildren();
   if (!total) {
-    summary.append(el("p", { class: "muted" }, d.noSpeech));
+    summary.append(el("p", { class: "empty" }, d.noSpeech));
     return;
   }
   for (const s of ["correct", "error", "unverified", "uncertain"] as const) {
@@ -193,7 +227,7 @@ async function showTyped(text: string): Promise<void> {
   const host = $("type-results");
   const gold = el("input", { lang: "ja", value: res.notation, "aria-label": d.nhkNotation });
   const save = el("button", { type: "button", class: "secondary" }, d.saveGold);
-  const saved = el("span", { class: "muted", "aria-live": "polite" });
+  const saved = el("span", { class: "status", "aria-live": "polite" });
   save.addEventListener("click", async () => {
     await api.addGold(res.text, gold.value);
     saved.textContent = d.goldAdded;
@@ -210,9 +244,9 @@ async function showTyped(text: string): Promise<void> {
         void showTyped(t);
       },
     })),
-    el("details", { class: "gold" },
+    el("details", { class: "gold disclosure" },
       el("summary", {}, d.goldSummary),
-      el("p", { class: "muted" }, d.goldHelp),
+      el("p", {}, d.goldHelp),
       gold, el("div", { class: "controls" }, save, saved)),
   );
 }
@@ -240,6 +274,12 @@ $<HTMLFormElement>("nhk-form").addEventListener("submit", async (e) => {
   await refreshOverrides();
 });
 
+// three lists, one at a time: words to check, saved, native accents
+type NhkView = "check" | "saved" | "variants";
+let nhkView: NhkView | undefined; // until picked: "check" when there is something to check
+const showNhkView = segments($("nhk-views"), $("tab-nhk"), (v) => (nhkView = v as NhkView));
+const countBadge = (id: string, n: number) => ($(id).textContent = n ? String(n) : "");
+
 // the saved list runs to thousands (Anki import): show a few, search or expand for the rest
 const SAVED_SHOWN = 10;
 let saved: api.Override[] = [];
@@ -256,7 +296,7 @@ function renderSaved(): void {
     ? saved.filter((o) => o.lemma.includes(q) || o.reading.includes(toKatakana(q)) || o.note.includes(q))
     : saved;
   const shown = savedExpanded ? matches : matches.slice(0, SAVED_SHOWN);
-  $("nhk-count").textContent = saved.length ? d.savedCount(saved.length) : "";
+  countBadge("count-saved", saved.length);
   $("nhk-search").hidden = saved.length <= SAVED_SHOWN;
 
   const table = $("nhk-list");
@@ -264,7 +304,7 @@ function renderSaved(): void {
     el("th", {}, d.lemma), el("th", {}, d.reading), el("th", {}, d.accent), el("th", {}, d.note), el("th", {}))));
   const body = el("tbody");
   for (const o of shown) {
-    const del = btn(d.delete, { quiet: true, danger: true });
+    const del = btn("", { quiet: true, danger: true, icon: "trash", title: d.deleteNamed(o.lemma) });
     del.addEventListener("click", async () => {
       await api.deleteOverride(o.lemma, o.reading, o.context);
       await refreshOverrides();
@@ -277,7 +317,7 @@ function renderSaved(): void {
 
   const more = $("nhk-more");
   more.replaceChildren();
-  if (q && !matches.length) more.append(el("span", { class: "muted" }, d.noSavedMatch));
+  if (q && !matches.length) more.append(el("span", { class: "empty" }, d.noSavedMatch));
   else if (matches.length > SAVED_SHOWN) {
     const toggle = btn(savedExpanded ? d.showFewer : d.showAllSaved(matches.length));
     toggle.addEventListener("click", () => {
@@ -302,7 +342,9 @@ async function refreshOverrides(): Promise<void> {
     b.addEventListener("click", () => fixWord(w));
     ul.append(el("li", {}, b, w.accents.length ? `  UniDic: ${w.accents.join(",")}` : ""));
   }
-  if (!toCheck.size) ul.append(el("li", { class: "muted" }, d.nothingYetRecord));
+  if (!toCheck.size) ul.append(el("li", { class: "empty" }, d.nothingYetRecord));
+  countBadge("count-check", toCheck.size);
+  showNhkView(nhkView ?? (toCheck.size ? "check" : "saved"));
   await refreshVariants();
 }
 
@@ -330,9 +372,30 @@ async function refreshVariants(): Promise<void> {
       el("td", { lang: "ja" }, notationNode({ moras }, v.accent)), el("td", {}, `${v.speakers}/${v.total}`),
       el("td", {}, d.variantStatus[v.status] ?? v.status), actions));
   }
-  if (!list.length) body.append(el("tr", {}, el("td", { class: "muted" }, d.noVariants)));
+  if (!list.length) body.append(el("tr", {}, el("td", { class: "empty" }, d.noVariants)));
   table.append(body);
+  countBadge("count-variants", list.length);
 }
+
+// --- help panels (ⓘ) and the notation key in them ----------------------------
+
+document.addEventListener("click", (e) => {
+  const b = (e.target as HTMLElement).closest<HTMLButtonElement>(".help-btn");
+  const panel = b && document.getElementById(b.getAttribute("aria-controls") ?? "");
+  if (!b || !panel) return;
+  panel.hidden = !panel.hidden;
+  b.setAttribute("aria-expanded", String(!panel.hidden));
+});
+
+const fillLegends = () => document.querySelectorAll(".legend-slot").forEach((s) => s.replaceChildren(legend()));
+
+// --- space switch -----------------------------------------------------------------
+
+document.querySelectorAll<HTMLButtonElement>(".space-switch button").forEach((b) =>
+  b.addEventListener("click", () => {
+    const s = b.dataset.space as Space;
+    if (s !== space) location.hash = `#${lastHash[s] ?? rememberedTab(s)}`;
+  }));
 
 // --- tutor credit (required by VOICEVOX's terms) ------------------------------
 
@@ -354,6 +417,7 @@ langToggle.addEventListener("click", () => {
   if (recordingNow()) return;
   setLang(lang() === "en" ? "ja" : "en");
   langToggle.lang = lang() === "en" ? "ja" : "en";
+  fillLegends();
   showCredit();
   detail.hidden = true;
   if (lastResult) showResults(lastResult);
@@ -367,6 +431,7 @@ window.setInterval(() => (langToggle.disabled = recordingNow()), 500);
 // --- start ---------------------------------------------------------------------
 
 applyStatic();
+fillLegends();
 langToggle.lang = lang() === "en" ? "ja" : "en";
 initLessons({ detail, onFix: (w) => fixWord(w, location.hash) });
 window.addEventListener("hashchange", route);

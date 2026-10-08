@@ -124,7 +124,7 @@ function pitchChart(p: AnalyzedPhrase): HTMLElement {
       el("td", {}, v === null || v === undefined ? "—" : v.toFixed(1))));
   });
   table.append(body);
-  root.append(el("details", {}, el("summary", {}, tx.showTable), table));
+  root.append(el("details", { class: "disclosure" }, el("summary", {}, tx.showTable), table));
   return root;
 }
 
@@ -161,13 +161,21 @@ export function renderDetail(
   const d = tr();
   host.replaceChildren();
   host.hidden = false;
-  const head = el("header", {}, el("h3", {}, p.text));
+  const head = el("header", {}, el("h3", { lang: "ja" }, p.text));
+  const tools = el("div", { class: "actions" });
   if ("status" in p && opts.onPlay && p.mora_times.length) {
     const play = btn(d.play, { play: true, title: d.hearPhraseYourself });
     const [s] = p.mora_times[0], [, e] = p.mora_times[p.mora_times.length - 1];
     play.addEventListener("click", () => opts.onPlay!(s, e));
-    head.append(play);
+    tools.append(play);
   }
+  const close = btn("", { quiet: true, icon: "close", title: d.close });
+  close.addEventListener("click", () => {
+    host.hidden = true;
+    document.querySelectorAll(".phrase.selected").forEach((n) => n.classList.remove("selected"));
+  });
+  tools.append(close);
+  head.append(tools);
   host.append(head);
 
   const rows = el("dl", { class: "compare" });
@@ -191,7 +199,8 @@ export function renderDetail(
       rows.append(el("dt", {}, d.youSaidRow), el("dd", {}, notationNode(p, p.observed, p.accent), " ",
         hear(p.observed, d.hearYourAccent)));
     }
-    host.append(el("p", { class: `verdict s-${p.status}` }, d.verdictLine(statusLabel(p.status), verdict(p))));
+    host.append(el("p", { class: "verdict" }, el("span", { class: `pill s-${p.status}` }, statusLabel(p.status)), " ",
+      verdict(p)));
   }
   if (opts.onReading && p.reading_alternatives.length) {
     const alts = el("dd", { class: "alts", lang: "ja" });
@@ -203,20 +212,26 @@ export function renderDetail(
     rows.append(el("dt", {}, d.readAs), alts);
   }
   host.append(rows);
-  host.append(el("p", { class: "muted" }, d.expectedSource(confidenceLabel(p.confidence))));
-  if (p.reasons.length) host.append(el("ul", { class: "reasons" }, ...p.reasons.map((r) => el("li", {}, reason(r)))));
   if ("status" in p && p.mora_times.length) host.append(pitchChart(p));
+
+  // where the expected accent comes from: open when it's in doubt (that's
+  // why the phrase is grey) and for typed text, where it's the point
+  const sources = el("details", { class: "section disclosure" }, el("summary", {}, d.wordsAndSources),
+    el("p", {}, d.expectedSource(confidenceLabel(p.confidence))));
+  if (p.reasons.length) sources.append(el("ul", { class: "reasons" }, ...p.reasons.map((r) => el("li", {}, reason(r)))));
+  sources.append(wordsTable(p.words, opts.onFix));
+  sources.open = !("status" in p) || p.confidence === "uncertain" || p.status === "unverified";
+  host.append(sources);
   if ("status" in p && opts.onReport && p.moras.length >= 2) host.append(reportBox(p, opts.onReport));
-  host.append(wordsTable(p.words, opts.onFix));
 }
 
 /** "Wrong verdict?": the user says which accent they really used. Saved
  * as a labelled clip of their voice for evaluating and training the detector. */
 function reportBox(p: AnalyzedPhrase, onReport: (said: number | null) => Promise<string>): HTMLElement {
   const d = tr();
-  const box = el("details", { class: "report" }, el("summary", {}, d.wrongVerdict));
+  const box = el("details", { class: "report section disclosure" }, el("summary", {}, d.wrongVerdict));
   const row = el("div", { class: "controls" });
-  const status = el("span", { class: "muted", "aria-live": "polite" });
+  const status = el("span", { class: "status", "aria-live": "polite" });
   const send = async (said: number | null) => {
     status.textContent = d.saving;
     try {
@@ -234,6 +249,6 @@ function reportBox(p: AnalyzedPhrase, onReport: (said: number | null) => Promise
   const unsure = btn(d.notSure, { quiet: true });
   unsure.addEventListener("click", () => void send(null));
   row.append(unsure);
-  box.append(el("p", { class: "muted" }, d.iSaid), row, status);
+  box.append(el("p", {}, d.iSaid), row, status);
   return box;
 }

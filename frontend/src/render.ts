@@ -71,16 +71,60 @@ export function phraseRow<T extends Phrase>(phrases: T[], onSelect: (p: T) => vo
   return row;
 }
 
-/** Small inline action button (play, jump, edit…). `play` draws a ▶ icon in
- * CSS; with an empty label it is icon-only and `title` names it. */
-export function btn(label: string, opts: { play?: boolean; quiet?: boolean; danger?: boolean; title?: string } = {}):
+/** Small inline action button (play, jump, edit…). `play` and `icon` draw
+ * an icon in CSS; with an empty label it is icon-only and `title` names it. */
+export function btn(label: string,
+    opts: { play?: boolean; quiet?: boolean; danger?: boolean; title?: string; icon?: "close" | "trash" } = {}):
     HTMLButtonElement {
-  const cls = ["btn-sm", opts.play && "play", opts.quiet && "quiet", opts.danger && "danger", !label && "icon"]
-    .filter(Boolean).join(" ");
+  const cls = ["btn-sm", opts.play && "play", opts.quiet && "quiet", opts.danger && "danger", !label && "icon",
+    opts.icon && `ico-${opts.icon}`].filter(Boolean).join(" ");
   const b = el("button", { type: "button", class: cls }, label);
   if (opts.title) {
     b.title = opts.title;
     if (!label) b.setAttribute("aria-label", opts.title);
   }
   return b;
+}
+
+/** How to read the marks: ＼, ━, red and grey. Lives in the help panels of
+ * pages that show phrases. */
+export function legend(): HTMLElement {
+  const d = tr();
+  return el("div", { class: "notation-key" },
+    el("h3", {}, d.legendTitle),
+    el("ul", {},
+      el("li", {}, el("span", { class: "notation", lang: "ja" }, el("span", { class: "mora high" }, "ト"),
+        el("span", { class: "drop" }, "＼")), " ", d.legendDrop),
+      el("li", {}, el("span", { class: "notation" }, el("span", { class: "flat" }, "━")), " ", d.legendFlat),
+      el("li", {}, el("span", { class: "sample s-error" }, d.legendRed), " ", d.legendRedText),
+      el("li", {}, el("span", { class: "sample s-unverified" }, d.legendGrey), " ", d.legendGreyText)));
+}
+
+/** The ⓘ button of a page and its help panel (closed). main.ts toggles every
+ * .help-btn through aria-controls. */
+export function helpToggle(id: string, open: boolean, ...content: (Node | string)[]): [HTMLButtonElement, HTMLElement] {
+  const label = tr().aboutPage;
+  const b = el("button", { type: "button", class: "help-btn", "aria-expanded": String(open), "aria-controls": id,
+    title: label, "aria-label": label });
+  const panel = el("div", { id, class: "help-panel" }, ...content);
+  panel.hidden = !open;
+  return [b, panel];
+}
+
+/** Wires a segmented control: its buttons (data-view) show the matching
+ * panel (data-panel) inside `scope` and hide the others. Returns show(view). */
+export function segments(group: HTMLElement, scope: HTMLElement, onPick?: (view: string) => void):
+    (view: string) => void {
+  const show = (view: string) => {
+    group.querySelectorAll<HTMLButtonElement>("button[data-view]").forEach((b) =>
+      b.setAttribute("aria-pressed", String(b.dataset.view === view)));
+    scope.querySelectorAll<HTMLElement>("[data-panel]").forEach((p) => (p.hidden = p.dataset.panel !== view));
+  };
+  group.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-view]");
+    if (!b) return;
+    show(b.dataset.view!);
+    onPick?.(b.dataset.view!);
+  });
+  return show;
 }

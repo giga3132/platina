@@ -7,7 +7,7 @@ import type { AnalyzedPhrase, Lesson, LessonDetail, LessonUtterance, Status, Wor
 import { renderDetail } from "./detail";
 import { locale, tr } from "./i18n";
 import { Clip, Recorder } from "./recorder";
-import { btn, el, notationNode, phraseRow } from "./render";
+import { btn, el, helpToggle, legend, notationNode, phraseRow } from "./render";
 import { tutorButton } from "./tutor";
 
 const PIECE_MS = 15_000; // a crash loses at most this much
@@ -141,6 +141,7 @@ async function startRecording(): Promise<void> {
     $("lesson-timer").textContent = clock((performance.now() - recorder.startedAt) / 1000);
   }, 500);
   recording = { id, uploader, tick, stopMeter: meter(recorder.stream!) };
+  $("record-card").classList.add("live");
   $("lesson-live").hidden = false;
   $("lesson-timer").textContent = "0:00";
   saved.textContent = d.nothingSavedYet;
@@ -164,6 +165,7 @@ async function stopRecording(): Promise<void> {
   rec.stopMeter();
   await rec.uploader.flush();
   recording = undefined;
+  $("record-card").classList.remove("live");
   $("lesson-live").hidden = true;
   button.textContent = tr().lessonRecord;
   button.classList.remove("on");
@@ -217,8 +219,7 @@ function statusLine(ls: Lesson): HTMLElement {
     }
     case "done": {
       const s = ls.summary!;
-      box.append(el("span", { class: "level-badge" }, d.levelBadge(Math.round(s.level))),
-        el("span", {}, d.mistakesIn(s.mistakes, s.judged)));
+      box.append(el("span", {}, d.mistakesIn(s.mistakes, s.judged)));
       if (!s.reliable) box.append(el("span", { class: "tag" }, d.tooShort));
       if (ls.outdated) box.append(el("span", { class: "tag" }, d.olderAnalysis));
     }
@@ -234,12 +235,13 @@ export async function refreshList(): Promise<void> {
   try {
     list = await api.listLessons();
   } catch {
-    ul.replaceChildren(el("li", { class: "muted" }, d.cantReach));
+    ul.replaceChildren(el("li", { class: "empty-state" }, d.cantReach));
     return;
   }
   ul.replaceChildren();
   if (!list.length) {
-    ul.append(el("li", { class: "muted" }, d.noLessons));
+    // the first visit: what lessons are for, and how to start
+    ul.append(el("li", { class: "empty-state" }, el("p", {}, d.lessonsIntro), el("p", {}, d.noLessons)));
   }
   for (const ls of list) {
     const title = ls.status === "done"
@@ -248,17 +250,21 @@ export async function refreshList(): Promise<void> {
     const meta = [dateOf(ls.created_at)];
     if (ls.duration) meta.push(d.recorded(minutes(ls.duration)));
     if (ls.summary) meta.push(d.youSpokeFor(minutes(ls.summary.speaking_s)));
-    const del = btn(d.delete, { quiet: true, danger: true });
-    del.setAttribute("aria-label", d.deleteNamed(ls.title));
+    const del = btn("", { quiet: true, danger: true, icon: "trash", title: d.deleteNamed(ls.title) });
     del.addEventListener("click", async () => {
       if (!confirm(d.confirmDelete(ls.title))) return;
       await api.deleteLesson(ls.id);
       void refreshList();
     });
+    const side = el("div", { class: "lesson-side" });
+    if (ls.summary) {
+      side.append(el("span", { class: ls.summary.reliable ? "lesson-level" : "lesson-level short" },
+        el("span", { class: "num" }, String(Math.round(ls.summary.level))), el("span", { class: "lbl" }, d.level)));
+    }
+    side.append(del);
     ul.append(el("li", { class: "lesson-item" },
-      el("div", { class: "lesson-head" }, title, del),
-      el("div", { class: "muted" }, meta.join(" · ")),
-      statusLine(ls)));
+      el("div", { class: "lesson-main" }, title, el("div", { class: "lesson-meta" }, meta.join(" · ")), statusLine(ls)),
+      side));
   }
   const busy = list.some((ls) => ls.status === "queued" || ls.status === "processing");
   if (busy) listTimer = window.setTimeout(() => {
@@ -280,15 +286,12 @@ function summaryBlock(lesson: LessonDetail): HTMLElement {
     el("div", { class: `stat ${cls}` }, el("span", { class: "stat-value" }, value), el("span", { class: "stat-label" }, label));
   box.append(el("div", { class: "stats" },
     card(String(Math.round(s.level)), d.levelRange(Math.round(s.level_range[0]), Math.round(s.level_range[1])), "level"),
-    card(String(s.counts.correct ?? 0), d.status_correct),
     card(String(s.counts.error ?? 0), d.mistakes, "s-error"),
-    card(String(s.counts.uncertain ?? 0), d.unclearNotCounted),
-    card(minutes(s.speaking_s), d.youSpoke)));
+    card(minutes(s.speaking_s), d.youSpoke)),
+    el("p", { class: "summary-line" }, d.summaryLine(s.counts.correct ?? 0, s.counts.uncertain ?? 0)));
   if (!s.reliable) {
     box.append(el("p", { class: "note" }, d.shortLessonNote));
   }
-  box.append(el("details", { class: "explain" }, el("summary", {}, d.howLevel),
-    el("p", {}, d.lessonLevelExplain(s.judged, s.correct, s.accuracy === null ? null : Math.round(s.accuracy * 100)))));
   return box;
 }
 
@@ -306,12 +309,11 @@ function mistakeRow(text: string, moras: string[], accent: number, said: number,
 function obviousBlock(lesson: LessonDetail): HTMLElement {
   const d = tr();
   const s = lesson.summary!;
-  const box = el("section", {}, el("h3", {}, d.mostObvious));
+  const box = el("section", {}, el("h2", {}, d.mostObvious));
   if (!s.obvious.length) {
-    box.append(el("p", { class: "muted" }, d.noClearMistakes));
+    box.append(el("p", { class: "empty" }, d.noClearMistakes));
     return box;
   }
-  box.append(el("p", { class: "muted" }, d.obviousIntro));
   const ol = el("ol", { class: "mistakes" });
   for (const m of s.obvious) {
     const play = btn(d.you, { play: true, title: d.hearYourselfSayIt });
@@ -329,9 +331,9 @@ function obviousBlock(lesson: LessonDetail): HTMLElement {
 function repeatedBlock(lesson: LessonDetail): HTMLElement {
   const d = tr();
   const s = lesson.summary!;
-  const box = el("section", {}, el("h3", {}, d.repeated));
+  const box = el("section", {}, el("h2", {}, d.repeated));
   if (!s.repeated.length) {
-    box.append(el("p", { class: "muted" }, d.noRepeated));
+    box.append(el("p", { class: "empty" }, d.noRepeated));
     return box;
   }
   const ul = el("ul", { class: "mistakes" });
@@ -347,7 +349,7 @@ function repeatedBlock(lesson: LessonDetail): HTMLElement {
     ul.append(el("li", {}, mistakeRow(r.text, r.moras, r.accent, r.said, r.count),
       el("div", { class: "actions" },
         tutorButton(d.expectedBtn, () => api.speakPhrase(r.moras, r.accent), d.hearExpected)),
-      el("details", { class: "each" }, el("summary", {}, d.hearEachTime), each)));
+      el("details", { class: "each disclosure" }, el("summary", {}, d.hearEachTime), each)));
   }
   box.append(ul);
   return box;
@@ -394,7 +396,7 @@ function editLine(line: HTMLElement, u: LessonUtterance): void {
   const cancel = el("button", { type: "button", class: "secondary" }, d.cancel);
   save.classList.add("small");
   cancel.classList.add("small");
-  const status = el("span", { class: "muted", "aria-live": "polite" });
+  const status = el("span", { class: "status", "aria-live": "polite" });
   const form = el("form", { class: "fix-line" }, input, save, cancel, status);
   cancel.addEventListener("click", () => form.replaceWith(line));
   form.addEventListener("submit", async (e) => {
@@ -420,11 +422,11 @@ function editLine(line: HTMLElement, u: LessonUtterance): void {
 
 function transcriptBlock(lesson: LessonDetail): HTMLElement {
   const d = tr();
-  const box = el("section", { class: "lesson-transcript" }, el("h3", {}, d.everything));
-  const filters = el("div", { class: "filters", role: "group", "aria-label": d.show });
+  const box = el("section", { class: "lesson-transcript" }, el("h2", {}, d.everything));
+  const filters = el("div", { class: "segmented", role: "group", "aria-label": d.show });
   const options: [Filter, string][] = [["all", d.allLines], ["error", d.linesMistakes], ["uncertain", d.linesUnclear]];
   for (const [f, label] of options) {
-    const b = el("button", { type: "button", class: "filter", "aria-pressed": String(view!.filter === f) }, label);
+    const b = el("button", { type: "button", class: "seg filter", "aria-pressed": String(view!.filter === f) }, label);
     b.addEventListener("click", () => {
       view!.filter = f;
       filters.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
@@ -432,8 +434,8 @@ function transcriptBlock(lesson: LessonDetail): HTMLElement {
     });
     filters.append(b);
   }
-  box.append(filters, el("p", { class: "muted keys" },
-    d.keysHelp[0], el("kbd", {}, "j"), d.keysHelp[1], el("kbd", {}, "k"), d.keysHelp[2]));
+  box.append(el("div", { class: "transcript-bar" }, filters,
+    el("span", { class: "keys-hint", title: d.keysTitle, "aria-hidden": "true" }, el("kbd", {}, "j"), el("kbd", {}, "k"))));
   const list = el("div", { class: "lines" });
   for (const u of lesson.utterances) list.append(utteranceBlock(lesson, u));
   box.append(list);
@@ -486,17 +488,26 @@ function renderLesson(): void {
   const lesson = view.lesson;
   const d = tr();
   const host = $("lesson-view");
-  const title = el("input", { class: "title-input", value: lesson.title, "aria-label": d.lessonTitle });
+  const title = el("input", { class: "title-input", value: lesson.title, "aria-label": d.lessonTitle,
+    size: String(Math.max(8, lesson.title.length + 1)) });
   title.addEventListener("change", () => void api.renameLesson(lesson.id, title.value));
   const meta = [dateOf(lesson.created_at)];
   if (lesson.duration) meta.push(d.recorded(minutes(lesson.duration)));
+  const s = lesson.summary;
+  const [help, panel] = helpToggle("help-lesson", $("help-lesson")?.hidden === false,
+    el("p", {}, d.keysHelp[0], el("kbd", {}, "j"), d.keysHelp[1], el("kbd", {}, "k"), d.keysHelp[2]),
+    el("p", {}, d.obviousIntro),
+    ...(s && lesson.status === "done" ? [el("h3", {}, d.howLevel),
+      el("p", {}, d.lessonLevelExplain(s.judged, s.correct, s.accuracy === null ? null : Math.round(s.accuracy * 100)))] : []),
+    legend());
   host.replaceChildren(
-    el("p", {}, el("a", { href: "#lessons", class: "back-link" }, d.allLessons)),
-    el("h2", { class: "lesson-h" }, title),
-    el("p", { class: "muted" }, meta.join(" · ")));
+    el("p", { class: "back-row" }, el("a", { href: "#lessons", class: "back-link" }, d.allLessons)),
+    el("div", { class: "page-head" }, el("h1", { class: "page-title" }, title), help),
+    el("p", { class: "muted lesson-meta" }, meta.join(" · ")),
+    panel);
 
   if (lesson.status !== "done") {
-    host.append(statusLine(lesson), el("p", { class: "muted" }, d.reviewAppears));
+    host.append(statusLine(lesson), el("p", { class: "status" }, d.reviewAppears));
     viewTimer = window.setTimeout(() => {
       if (view?.lesson.id === lesson.id && !host.hidden) void openLesson(lesson.id);
     }, POLL_MS);
@@ -524,7 +535,7 @@ async function openLesson(id: string, focus?: [number, number]): Promise<void> {
   try {
     lesson = await api.getLesson(id);
   } catch (e) {
-    host.replaceChildren(el("p", {}, el("a", { href: "#lessons", class: "back-link" }, tr().allLessons)),
+    host.replaceChildren(el("p", { class: "back-row" }, el("a", { href: "#lessons", class: "back-link" }, tr().allLessons)),
       el("p", {}, tr().couldntOpen((e as Error).message)));
     return;
   }

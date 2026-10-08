@@ -22,14 +22,19 @@ function shortDate(ts: number): string {
 }
 
 function headline(p: Progress): HTMLElement {
-  const card = (value: string, label: string, note: string) =>
-    el("div", { class: "stat" }, el("span", { class: "stat-value" }, value), el("span", { class: "stat-label" }, label),
-      el("span", { class: "stat-note" }, note));
+  // the note says why a number is missing; once it's there, it's a tooltip
+  const card = (value: string, label: string, note: string, cls = "") => {
+    const box = el("div", { class: `stat ${cls}` }, el("span", { class: "stat-value" }, value),
+      el("span", { class: "stat-label" }, label));
+    if (value === "—") box.append(el("span", { class: "stat-note" }, note));
+    else box.title = note;
+    return box;
+  };
   const d = tr();
   const minMin = Math.round(p.min_speaking_s / 60);
   return el("div", { class: "stats" },
     card(p.current_level === null ? "—" : String(Math.round(p.current_level)), d.yourLevel,
-      p.current_level === null ? d.levelAppears(p.min_judged, minMin) : d.levelAverage),
+      p.current_level === null ? d.levelAppears(p.min_judged, minMin) : d.levelAverage, "level"),
     card(p.change === null ? "—" : `${p.change >= 0 ? "+" : "−"}${Math.abs(Math.round(p.change))}`, d.change,
       p.change === null ? d.changeLater : d.changeSince),
     card(minutes(p.speaking_s), d.youveSpoken, d.inLessons(p.lessons.length)));
@@ -108,13 +113,13 @@ function table(lessons: ProgressLesson[]): HTMLElement {
       el("td", {}, s.reliable ? d.yes : d.noTooShort)));
   }
   t.append(body);
-  return el("details", {}, el("summary", {}, d.showTable), t);
+  return el("details", { class: "disclosure" }, el("summary", {}, d.showTable), t);
 }
 
-function words(title: string, intro: string, empty: string, list: WordProgress[], fixed = false): HTMLElement {
-  const box = el("section", { class: "word-list" }, el("h3", {}, title), el("p", { class: "muted" }, intro));
+function words(title: string, empty: string, list: WordProgress[], fixed = false): HTMLElement {
+  const box = el("section", { class: "word-list" }, el("h2", {}, title));
   if (!list.length) {
-    box.append(el("p", { class: "muted" }, empty));
+    box.append(el("p", { class: "empty" }, empty));
     return box;
   }
   const ul = el("ul");
@@ -143,7 +148,7 @@ function kinds(lessons: ProgressLesson[]): HTMLElement {
       ...KINDS.map((k) => el("td", {}, String(s.kinds[k] ?? 0)))));
   }
   t.append(body);
-  return el("details", { class: "kinds" }, el("summary", {}, d.byKind), el("p", { class: "muted" }, d.byKindIntro), t);
+  return el("details", { class: "kinds disclosure" }, el("summary", {}, d.byKind), el("p", {}, d.byKindIntro), t);
 }
 
 export async function showProgress(): Promise<void> {
@@ -153,13 +158,13 @@ export async function showProgress(): Promise<void> {
   try {
     p = await api.progress();
   } catch {
-    host.replaceChildren(el("p", { class: "muted" }, d.cantReach));
+    host.replaceChildren(el("p", { class: "empty" }, d.cantReach));
     return;
   }
   if (!p.lessons.length) {
     host.replaceChildren(
       el("p", {}, d.noLessonsProgress[0], el("a", { href: "#lessons" }, d.tabLessons), d.noLessonsProgress[1]),
-      el("p", { class: "muted" }, d.countsWhen(p.min_judged, Math.round(p.min_speaking_s / 60))));
+      el("p", {}, d.countsWhen(p.min_judged, Math.round(p.min_speaking_s / 60))));
     return;
   }
   host.replaceChildren(headline(p));
@@ -173,12 +178,11 @@ export async function showProgress(): Promise<void> {
     host.append(el("p", { class: "note" }, d.outdatedLessons(p.outdated), again));
   }
   host.append(
-    el("h3", {}, d.levelPerLesson),
+    el("h2", {}, d.levelPerLesson),
     chart(p.lessons),
     el("div", { class: "word-columns" },
-      words(d.workOn, d.workOnIntro, d.workOnEmpty, p.work_on),
-      words(d.fixed, d.fixedIntro, d.fixedEmpty, p.fixed, true)),
+      words(d.workOn, d.workOnEmpty, p.work_on),
+      words(d.fixed, d.fixedEmpty, p.fixed, true)),
     kinds(p.lessons),
-    el("details", { class: "explain" }, el("summary", {}, d.howLevel), el("p", {}, d.progressLevelExplain)),
   );
 }

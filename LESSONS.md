@@ -37,6 +37,10 @@ you, for everything you said in Japanese:
 
 Every lesson is saved, and the **Progress** page shows how your level changes from lesson to lesson.
 
+Everything for your lessons is under **My lessons** at the top of Platina. The **Workshop** next to it holds tools for
+one-off checks and experiments; you don't need it for your lessons. On every page, the round **i** next to the title
+explains the page.
+
 How to read the accent marks:
 
 | Mark | Meaning |
@@ -131,17 +135,20 @@ Now join your class as usual.
      correct, mistakes or unclear.
    - **Most obvious mistakes**, with **▶ You** (hear yourself), **▶ Expected** (hear the right accent) and
      **Go to …** (jump to that line).
-   - **Repeated mistakes**, with **Show each time** to hear every occurrence.
+   - **Repeated mistakes**, with **Hear each time** to hear every occurrence.
    - **Everything you said**: the full transcript.
+
+   The round **i** next to the lesson's title shows how to read the marks, the keyboard shortcuts, and how the level
+   is worked out.
 
 In the transcript:
 
 - **Click a phrase** to see its details on the side: the expected accent, what you said, a chart of your pitch, and
-  buttons to listen.
+  buttons to listen. **×** closes them.
 - **Show:** *All lines*, *Lines with mistakes* or *Lines with unclear phrases*.
 - **Keyboard:** press <kbd>j</kbd> for the next mistake and <kbd>k</kbd> for the previous one. <kbd>Tab</kbd> and
   <kbd>Enter</kbd> work everywhere.
-- **The text is wrong?** Speech recognition sometimes mishears. Click **✎ Fix text**, type what you really said, and
+- **The text is wrong?** Speech recognition sometimes mishears. Click **Edit text**, type what you really said, and
   press **Save and re-check**. Only that line is checked again.
 - **A word is read wrong?** Kanji like 日本 (にほん / にっぽん) or 明日 (あした / あす) have more than one reading, and
   Platina sometimes picks the one you didn't say. When fixing the text, write the reading in braces after the kanji:
@@ -188,9 +195,10 @@ gets better, older lessons were judged differently. Press **Re-check them** to m
   little about your accent.
 - **Aim for a few minutes of your own speaking** per lesson, so the lesson counts.
 - **Grey words** (*Check the dictionary*) are words whose accent the dictionaries disagree on. If you have the NHK
-  accent dictionary, look the word up and enter it under **Workshop → My NHK accents**. From then on Platina uses your
+  accent dictionary, look the word up, switch to the **Workshop** at the top, and enter it under **My NHK accents**. From then on Platina uses your
   entry. Press **← Back to lesson** to return.
-- The **Workshop** (Quick check, Type, My NHK accents, Practice) is for one-off checks and experiments. Nothing there
+- The **Workshop** (the switch at the top: Quick check, Type, My NHK accents, Practice) is for one-off checks and
+  experiments. Nothing there
   changes your lessons or progress.
 
 ## 10. Privacy
@@ -199,7 +207,7 @@ Everything stays on your computer. Nothing is uploaded to the internet.
 
 - Lesson recordings are in `backend/data/lessons/` (one folder per lesson), the reviews in
   `backend/data/lessons.sqlite`.
-- **Delete one lesson:** the **Delete** link next to it on the Lessons page removes its recording and review for good.
+- **Delete one lesson:** the bin button next to it on the Lessons page removes its recording and review for good.
 - **Delete all lessons:** stop Platina (<kbd>Ctrl</kbd>+<kbd>C</kbd> in its terminal), then delete the folder
   `backend/data/lessons/` and the file `backend/data/lessons.sqlite`.
 

@@ -21,7 +21,8 @@ The interface is in English or Japanese: the button at the top right switches (�
 remembered in the browser; the first visit follows the browser's language. All UI text is in `frontend/src/i18n.ts`
 (`en`, and `ja` with the same type, so a missing translation is a compile error).
 
-The app has two areas:
+The app has two spaces, switched at the top. Each has its own colour (blue for My lessons, grey for the
+Workshop), and each page explains itself behind the round **i** next to its title:
 
 - **My lessons** (*Lessons*, *Progress*). Record a whole class, review it afterwards (most obvious mistakes,
   repeated mistakes, the full transcript), and follow your level across lessons. See [LESSONS.md](LESSONS.md).
@@ -123,7 +124,7 @@ first one is the one Platina plays and shows.
 The dictionary can't be bundled, so these accents stay on your machine (`backend/data/overrides.sqlite`,
 ignored by git). There are two ways to add them:
 
-- **My NHK accents** tab: look up a grey word, or one under *Words to check*, and enter its accent
+- **My NHK accents** tab: look up a grey word, or one under *To check*, and enter its accent
   number(s) (0 = heiban, n = drop after mora n).
 - **From an Anki deck**: export a deck of NHK accents as *Notes in Plain Text* (front `せんせい【先生】`,
   back `センセ↘イ`, `アンキ＝` or `ヨソー━`, one per line) and run
