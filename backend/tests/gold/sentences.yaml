@@ -79,4 +79,5 @@
 - text: 日本語を話す。
   expected: ニホンゴオ━ ハナ＼ス
   verified: false
-  known_issue: UniDic splits 日本+語 and reads 日本 as ニッポン (flagged uncertain)
+  known_issue: the reading is right now (ニホンゴ), but UniDic's C3 rule for 語 gives ニホ＼ンゴ;
+    needs 日本語 stored whole as an NHK override (flagged uncertain)

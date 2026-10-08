@@ -28,6 +28,17 @@ export interface Phrase {
   merge_accents: number[];
   native_variants: number[];
   proposed_variants: number[];
+  reading_alternatives: ReadingAlternative[];
+}
+
+/** Another reading of some kanji in a phrase; `text` is the input text
+ * asking for it with a hint, 日本{にっぽん}語. */
+export interface ReadingAlternative {
+  start: number;
+  end: number;
+  surface: string;
+  reading: string;
+  text: string;
 }
 
 export interface AnalyzedPhrase extends Phrase {

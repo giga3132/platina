@@ -34,3 +34,10 @@ def test_form_lines():
     assert form_lines(parsed, "タカイ", "タカイ", True) == [("タカカッタ", 1), ("タカク", 1), ("タカク", 2)]
     # a noun's forms start with the whole word
     assert form_lines([("エキ", 1), ("エキオ", 1), ("エイ", 1)], "エキ", "エキ", False) == [("エキオ", 1)]
+
+
+def test_compounds_the_tagger_splits_are_stored_whole():
+    assert resolve(["日本語"], None, [("ニホンゴ", 0)]) == ("日本語", "ニホンゴ", [0])
+    assert resolve(["土曜日"], "どようび", [("ドヨービ", 2)]) == ("土曜日", "ドヨウビ", [2])
+    # not phrases with a particle in them
+    assert resolve(["目の前"], None, [("メノマエ", 3)])[:2] == (None, "compound")

@@ -16,12 +16,13 @@ The other lines of a plain card that spell a form of the word (高い:
 stored as NHK forms, which the engine uses for a phrase that is exactly
 that form.
 
-Single words go into data/overrides.sqlite (note "anki: <headword>"), so the
+Words go into data/overrides.sqlite (note "anki: <headword>"), so the
 engine marks phrases made of them as NHK-checked. Re-running replaces earlier
 anki imports but never overwrites an override entered in the app (unless
---force). Compounds the tagger splits (美術館, 土曜日) can't be stored per
-lexeme; --check prints where the engine's compound accent differs from the
-deck, which is where rules.py needs work.
+--force). Compounds the tagger splits (日本語, 美術館, 土曜日) are stored whole
+and the engine matches them across the split (engine.compounds); --check
+prints where the engine's own compound accent differs from the deck, which is
+where rules.py needs work.
 
 Usage (from backend/):
   ../.venv/bin/python -m tools.import_anki ../単語の発音.txt [--dry-run] [--check] [--force]
@@ -167,6 +168,10 @@ def resolve(forms: list[str], kana_hint: str | None, prons: list[tuple[str, int]
             return m0.lemma, m0.lemma_reading, accents
     ms = unidic_morphs(forms[0])
     if len(ms) > 1:
+        # stored whole if the engine can match it as one run (engine.compounds)
+        if (not (ms[0].is_function_word or ms[0].is_symbol) and ms[-1].ctype == "*"
+                and not any(m.pos in ("助詞", "助動詞") or m.is_symbol for m in ms[1:])):
+            return forms[0], to_katakana(kana_hint or kana), accents
         return None, "compound", ms
     if kana_hint or ("ー" not in kana and not _affix(ms[0])):
         # the tagger reads the bare headword differently (鼻 → ビ, 人 → ジン);
@@ -207,6 +212,8 @@ def main():
             if reading == "compound":
                 compounds.append((forms[0], prons))
             continue
+        if lemma == forms[0] and len(unidic_morphs(lemma)) > 1:  # stored whole
+            compounds.append((forms[0], prons))
         if not context:
             inflects = (m := unidic_morphs(lemma)) and m[0].pos in ("動詞", "形容詞")
             for kana, acc in form_lines(parsed, hint or prons[0][0], reading, bool(inflects)):

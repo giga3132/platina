@@ -155,6 +155,7 @@ export function renderDetail(
     onFix: (w: Word) => void;
     onPlay?: (start: number, end: number) => void;
     onReport?: (said: number | null) => Promise<string>;
+    onReading?: (text: string) => void;
   },
 ): void {
   const d = tr();
@@ -191,6 +192,15 @@ export function renderDetail(
         hear(p.observed, d.hearYourAccent)));
     }
     host.append(el("p", { class: `verdict s-${p.status}` }, d.verdictLine(statusLabel(p.status), verdict(p))));
+  }
+  if (opts.onReading && p.reading_alternatives.length) {
+    const alts = el("dd", { class: "alts", lang: "ja" });
+    for (const a of p.reading_alternatives) {
+      const b = btn(`${a.surface}（${a.reading}）`, { quiet: true, title: d.readAsTitle(a.surface, a.reading) });
+      b.addEventListener("click", () => opts.onReading!(a.text));
+      alts.append(b, " ");
+    }
+    rows.append(el("dt", {}, d.readAs), alts);
   }
   host.append(rows);
   host.append(el("p", { class: "muted" }, d.expectedSource(confidenceLabel(p.confidence))));

@@ -206,3 +206,79 @@ def test_flat_nhk_form_does_not_decide_a_longer_phrase():
     store = OverrideStore(":memory:")
     store.put_form("赤い", "あかい", "アカク", [0])
     assert analyze_text("赤くない。", store)[0].alternatives == [4, 3]
+
+
+def _reading(text: str, store: OverrideStore | None = None) -> str:
+    return " ".join("".join(p.moras) for p in analyze_text(text, store))
+
+
+@pytest.mark.parametrize("text, reading", [
+    ("日本語を話す。", "ニホンゴオ ハナス"),  # MeCab's best path says ニッポン
+    ("明日行く。", "アシタ イク"),  # アス
+    ("私は", "ワタシワ"),  # ワタクシ
+    ("上手だ。", "ジョウズダ"),
+    ("一日中", "イチニチジュウ"),
+    ("実は", "ジツワ"),
+    ("会いましょう。", "アイマショウ"),  # paths split like OpenJTalk (ましょ+う) don't win
+])
+def test_reading_chosen_from_nbest_paths(text, reading):
+    assert _reading(text) == reading
+
+
+def test_nhk_entry_decides_an_ambiguous_reading():
+    store = OverrideStore(":memory:")
+    store.put("実", "み", [0])  # a one-word entry doesn't force its reading
+    assert _reading("実は", store) == "ジツワ"
+    assert _reading("今オランダに") == "コンオランダニ"  # OpenJTalk's (wrong) コン, with no other evidence
+    store.put("今", "いま", [1])
+    assert _reading("今オランダに", store) == "イマ オランダニ"  # NHK ties it; MeCab's イマ stays
+    assert _reading("日本人です。") == "ニッポンジンデス"  # OpenJTalk agrees with MeCab here
+    store.put("日本人", "にほんじん", [4])  # a compound stored whole does
+    assert _reading("日本人です。", store) == "ニホンジンデス"
+
+
+def test_reading_hint():
+    phrases = analyze_text("日本{にっぽん}語を話す。")
+    assert "".join(phrases[0].moras) == "ニッポンゴオ"
+    assert (phrases[0].start, phrases[0].end, phrases[0].text) == (0, 4, "日本語を")  # offsets without the hint
+    assert "".join(analyze_text("行{おこな}った。")[0].moras) == "オコナッタ"  # okurigana after the hint
+    assert "".join(analyze_text("今日｛こんにち｝は")[0].moras) == "コンニチワ"  # full-width braces
+
+
+def test_unknown_reading_hint_is_reported():
+    p = analyze_text("日本{にぽぽ}")[0]
+    assert p.confidence == "uncertain"
+    assert "reading にぽぽ not in dictionary for 日本" in p.reasons
+
+
+def test_reading_alternatives():
+    alts = analyze_text("日本語を話す。")[0].reading_alternatives
+    assert [(a["surface"], a["reading"], a["text"]) for a in alts] == [("日本", "にっぽん", "日本{にっぽん}語を話す。")]
+    alts = analyze_text("日本{にっぽん}語")[0].reading_alternatives
+    assert [(a["reading"], a["text"]) for a in alts] == [("にほん", "日本{にほん}語")]  # replaces the hint
+    assert "こんにち" in [a["reading"] for a in analyze_text("今日は")[0].reading_alternatives]
+    # not the suffix 語り (カタリ), which MeCab also offers
+    assert all(a["surface"] != "語" for a in analyze_text("日本語")[0].reading_alternatives)
+
+
+def test_compound_rule_is_not_nhk():
+    store = OverrideStore(":memory:")
+    store.put("日本", "にほん", [2])
+    store.put("話す", "はなす", [2])
+    p = analyze_text("日本語を話す。", store)[0]
+    assert p.confidence == "uncertain"  # 日本 is NHK, but ニホ＼ンゴ comes from 語's C3 rule
+    store.put("日本語", "にほんご", [0])
+    p = analyze_text("日本語を話す。", store)[0]
+    assert (p.notation, p.confidence) == ("ニホンゴオ━", "nhk")
+    assert [w.surface for w in p.words] == ["日本語", "を"]
+
+
+def test_compound_stored_whole_spans_split_phrases():
+    store = OverrideStore(":memory:")
+    assert len(analyze_text("土曜日", store)) == 2  # 土曜 | 日 without it
+    store.put("土曜日", "どようび", [2])
+    phrases = analyze_text("土曜日に", store)
+    assert [(p.notation, p.confidence) for p in phrases] == [("ドヨ＼ウビニ", "nhk")]
+    store.put("学校", "がっこう", [0])
+    store.put("日本語学校", "にほんごがっこー", [5])  # NHK's ー matches ウ
+    assert analyze_text("日本語学校", store)[0].notation == "ニホンゴガ＼ッコウ"

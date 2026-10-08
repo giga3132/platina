@@ -148,6 +148,14 @@ def _get_rule(con: str, prev_pos: str) -> tuple[str, list[int]]:
     return "*", []
 
 
+def compound_rule(prev: Morph, node: Morph) -> bool:
+    """node joins prev by a compound (C) rule: the phrase accent is built by
+    rule (日本 + 語 → ニホ＼ンゴ), not taken from either word's own entry."""
+    if prev.pos == "接頭詞" and prev.con_type.startswith("P"):
+        return False
+    return _get_rule(corrected_con_type(node), prev.pos)[0].startswith("C")
+
+
 # Contracted ている / ておく / てしまう / ていく (来て(る)ない, 見とく, 食べちゃう).
 # UniDic tags them 助動詞, OpenJTalk 動詞-非自立.
 _TE_CONTRACTIONS = {"てる", "でる", "とく", "どく", "ちゃう", "じゃう", "てく", "でく"}

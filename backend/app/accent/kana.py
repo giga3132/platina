@@ -1,4 +1,7 @@
-"""Kana helpers: hiragana→katakana, mora splitting, particle pronunciation."""
+"""Kana helpers: hiragana→katakana, mora splitting, particle pronunciation,
+reading hints."""
+
+import re
 
 _SMALL = set("ァィゥェォャュョヮ")
 
@@ -9,6 +12,13 @@ PARTICLE_PRON = {"ヲ": "オ", "ハ": "ワ", "ヘ": "エ"}
 def to_katakana(text: str) -> str:
     return "".join(
         chr(ord(c) + 0x60) if "ぁ" <= c <= "ゖ" else c
+        for c in text
+    )
+
+
+def to_hiragana(text: str) -> str:
+    return "".join(
+        chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c
         for c in text
     )
 
@@ -29,6 +39,46 @@ def split_moras(kana: str) -> list[str]:
         elif "ァ" <= c <= "ヺ" or c == "ー":
             moras.append(c)
     return moras
+
+
+def same_moras(a: list[str], b: list[str]) -> bool:
+    """Same reading, allowing for long vowels written as ー (NHK イーマス,
+    OpenJTalk キョー) where others spell them out, and ヲ said as オ."""
+    return len(a) == len(b) and all(x == y or "ー" in (x, y) or {x, y} <= {"ヲ", "オ"}
+                                    for x, y in zip(a, b))
+
+
+# A reading the user gives for the kanji right before it: 日本{にっぽん}語,
+# 行{おこな}った. Full-width braces too, as a Japanese IME types them.
+_HINT = re.compile(r"([\u3400-\u9fff\uf900-\ufaff々〆ヶ]+)[{｛]([ぁ-ゖァ-ヺー]+)[}｝]")
+
+
+def strip_reading_hints(text: str) -> tuple[str, dict[tuple[int, int], str]]:
+    """Text without its reading hints, and each hint as {(start, end) of the
+    kanji in the plain text: reading in katakana}."""
+    plain, hints, last = [], {}, 0
+    n = 0
+    for m in _HINT.finditer(text):
+        before = text[last:m.start()] + m.group(1)
+        start = n + len(before) - len(m.group(1))
+        plain.append(before)
+        n += len(before)
+        hints[(start, n)] = to_katakana(m.group(2))
+        last = m.end()
+    plain.append(text[last:])
+    return "".join(plain), hints
+
+
+def with_reading_hint(text: str, start: int, end: int, reading: str) -> str:
+    """``text`` (which may hold hints) with a hint reading plain-text span
+    [start, end) as ``reading``, replacing any hint overlapping it."""
+    plain, hints = strip_reading_hints(text)
+    hints = {(s, e): r for (s, e), r in hints.items() if e <= start or s >= end}
+    hints[(start, end)] = to_katakana(reading)
+    out = plain
+    for (s, e), r in sorted(hints.items(), reverse=True):
+        out = out[:e] + "{" + to_hiragana(r) + "}" + out[e:]
+    return out
 
 
 _VOWEL_ROWS = {

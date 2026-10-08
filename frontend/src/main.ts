@@ -203,7 +203,13 @@ async function showTyped(text: string): Promise<void> {
     el("div", { class: "controls" },
       tutorButton(d.listen, () => api.speak(res.text)),
       tutorButton(d.slow, () => api.speak(res.text, 0.75))),
-    phraseRow(res.phrases, (p) => renderDetail(detail, p, { onFix: fixWord })),
+    phraseRow(res.phrases, (p) => renderDetail(detail, p, {
+      onFix: fixWord,
+      onReading: (t) => {
+        $<HTMLTextAreaElement>("type-input").value = t;
+        void showTyped(t);
+      },
+    })),
     el("details", { class: "gold" },
       el("summary", {}, d.goldSummary),
       el("p", { class: "muted" }, d.goldHelp),

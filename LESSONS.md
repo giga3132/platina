@@ -143,6 +143,10 @@ In the transcript:
   <kbd>Enter</kbd> work everywhere.
 - **The text is wrong?** Speech recognition sometimes mishears. Click **✎ Fix text**, type what you really said, and
   press **Save and re-check**. Only that line is checked again.
+- **A word is read wrong?** Kanji like 日本 (にほん / にっぽん) or 明日 (あした / あす) have more than one reading, and
+  Platina sometimes picks the one you didn't say. When fixing the text, write the reading in braces after the kanji:
+  `日本{にっぽん}語`, `今日{こんにち}は`. In the **Type** tab, the phrase details list the other readings; click one
+  to use it.
 - **Platina judged you wrong?** In the phrase details, open **Wrong verdict? Tell Platina what you said** and pick the
   accent you used. This saves the clip, which helps Platina learn your voice.
 

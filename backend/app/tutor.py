@@ -17,7 +17,7 @@ from functools import lru_cache
 import httpx
 
 from .accent.engine import Phrase
-from .accent.kana import vowel_of
+from .accent.kana import strip_reading_hints, vowel_of
 
 VOICEVOX_URL = os.environ.get("PLATINA_VOICEVOX_URL", "http://127.0.0.1:50021")
 # No.7 アナウンス: announcer style, and it follows the requested pitch closely
@@ -59,6 +59,7 @@ def to_kana(phrases: list[Phrase], text: str, accents: dict[int, int] | None = N
     pause (、), otherwise phrases are joined in one breath (/). `accents`
     replaces the accent of some phrases (index among phrases with moras),
     e.g. to say a deliberate mistake in the Practice tab."""
+    text = strip_reading_hints(text)[0]  # phrase offsets are into the text without hints
     phrases = [p for p in phrases if p.moras]
     if not phrases:
         raise ValueError("nothing to say")

@@ -340,6 +340,12 @@ const en = {
       noun: "as a noun", adverb: "used as an adverb" } as Record<string, string>)[use] ?? use}`,
   reasonForm: (word: string) => `this form of ${word} as NHK lists it`,
   reasonDisagree: (u: string, o: string) => `dictionaries disagree: UniDic ${u}, OpenJTalk ${o}`,
+  reasonOtherReading: (word: string, reading: string) => `${word} could also be read ${reading}`,
+  reasonHintUnmet: (reading: string, word: string) =>
+    `no dictionary reads ${word} as ${reading}; using the dictionary's reading`,
+  readAs: "Other readings",
+  readAsTitle: (word: string, reading: string) => `Read ${word} as ${reading} (adds ${word}{${reading}} to the text)`,
+  typeHint: "Wrong reading? Write it after the kanji in braces: 日本{にっぽん}語",
 
   // tutor voice
   tutorUnavailable: (m: string) => `Tutor voice unavailable — ${m}`,
@@ -673,6 +679,11 @@ const ja: Dict = {
       adverb: "副詞としての" } as Record<string, string>)[use] ?? use}${word}のNHKアクセント`,
   reasonForm: (word: string) => `NHKに載っている${word}の活用形`,
   reasonDisagree: (u: string, o: string) => `辞書間で不一致：UniDic ${u}、OpenJTalk ${o}`,
+  reasonOtherReading: (word: string, reading: string) => `${word}は「${reading}」とも読める`,
+  reasonHintUnmet: (reading: string, word: string) => `${word}を「${reading}」と読む辞書がないため、辞書の読みを使用`,
+  readAs: "ほかの読み方",
+  readAsTitle: (word: string, reading: string) => `${word}を「${reading}」と読む（文に${word}{${reading}}を追加）`,
+  typeHint: "読み方が違うときは、漢字の後に { } で書いてください：日本{にっぽん}語",
 
   tutorUnavailable: (m: string) => `お手本の音声を利用できません：${m}`,
   couldntPlay: (m: string) => `再生できませんでした：${m}`,
@@ -742,6 +753,8 @@ export function reason(r: string): string {
   if ((m = r.match(/^NHK (modified|unmodified|noun|adverb) use of (.+)$/))) return d.reasonUse(m[2], m[1]);
   if ((m = r.match(/^NHK form of (.+)$/))) return d.reasonForm(m[1]);
   if ((m = r.match(/^dictionaries disagree: UniDic (.+), OpenJTalk (.+)$/))) return d.reasonDisagree(m[1], m[2]);
+  if ((m = r.match(/^other reading possible: (\S+) (\S+)$/))) return d.reasonOtherReading(m[1], m[2]);
+  if ((m = r.match(/^reading (\S+) not in dictionary for (.+)$/))) return d.reasonHintUnmet(m[1], m[2]);
   const fixed: Record<string, string> = {
     "unknown accent rule": d.reasonUnknownRule,
     "no reading": d.reasonNoReading,

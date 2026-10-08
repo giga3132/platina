@@ -10,6 +10,10 @@ use separately: 人 ヒト━ (人を呼ぶ) but ヒト＼ after a modifier (優
 carry a context (one of CONTEXTS); the engine works out the token's uses
 and the plain row ('') covers every other use.
 
+Compounds NHK lists as one word (日本語 ニホンゴ━) are stored like any other
+word; the engine matches them across UniDic's split (日本 + 語) with
+lookup_compound, since the compound rules don't always give NHK's accent.
+
 NHK also lists whole forms (高い: タ＼カク, タカ＼ク, タ＼カカッタ; 学ぶ:
 マナバナイ━, マナビマ＼ス; 駅: エ＼キオ). Those go in the forms table and
 win over the rules when a phrase is exactly that form.
@@ -23,7 +27,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-from .kana import to_katakana
+from .kana import same_moras, split_moras, to_katakana
 from .sources import Morph
 
 DEFAULT_DB = Path(__file__).resolve().parents[2] / "data" / "overrides.sqlite"
@@ -122,6 +126,35 @@ class OverrideStore:
         plain one."""
         hit = self.lookup_use(m, uses)
         return hit[0] if hit else None
+
+    def has_reading(self, m: Morph) -> bool:
+        """Some row (any use) exists for this token's word and reading: the
+        user has it from NHK, so the reading is a real one."""
+        return self.lookup_use(m, CONTEXTS[1:]) is not None
+
+    def lookup_compound(self, surface: str, reading: str) -> list[int] | None:
+        """Plain row for a compound stored whole (日本語 / ニホンゴ); NHK's
+        ー matches a spelled-out long vowel (ガッコー / ガッコウ)."""
+        want = split_moras(to_katakana(reading))
+        for stored, accents in self._db.execute(
+                "SELECT reading, accents FROM overrides WHERE lemma = ? AND context = ''", (surface,)):
+            if same_moras(split_moras(stored), want):
+                return json.loads(accents)
+        return None
+
+    def compounds_in(self, text: str) -> dict[tuple[int, int], str]:
+        """Every place a word stored with a single plain reading appears in
+        the text, with that reading: (start, end) → katakana."""
+        out = {}
+        for lemma, readings in self._db.execute(
+                "SELECT lemma, group_concat(DISTINCT reading) FROM overrides"
+                " WHERE context = '' AND length(lemma) > 1 AND instr(?, lemma) > 0"
+                " GROUP BY lemma HAVING count(DISTINCT reading) = 1", (text,)):
+            i = text.find(lemma)
+            while i >= 0:
+                out[(i, i + len(lemma))] = readings
+                i = text.find(lemma, i + 1)
+        return out
 
     def lookup_use(self, m: Morph, uses: tuple[str, ...] = ()) -> tuple[list[int], str] | None:
         """Like lookup, also returning which row matched ('' = the plain one)."""

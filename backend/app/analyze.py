@@ -6,7 +6,7 @@ import numpy as np
 
 from .accent.detect import detect_accent
 from .accent.engine import Phrase, analyze_text
-from .accent.kana import special_moras
+from .accent.kana import special_moras, strip_reading_hints
 from .accent.notation import phrase_notation, pitch_pattern
 from .accent.overrides import OverrideStore
 from .audio.align import align_moras
@@ -103,6 +103,7 @@ def analyze_audio(wav: np.ndarray, text: str, overrides: OverrideStore | None = 
     from .accent import model as learned
 
     phrases = analyze_text(text, overrides, variants)
+    text = strip_reading_hints(text)[0]  # phrase offsets are into the text without hints
     moras = [m for p in phrases for m in p.moras]
     spans = align_moras(wav, moras) if moras else None
     use_model = learned.available() and spans is not None
