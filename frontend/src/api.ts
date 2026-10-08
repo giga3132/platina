@@ -67,6 +67,8 @@ export interface Override {
   reading: string;
   accents: number[];
   note: string;
+  /** use the accent applies to ("" = any), e.g. "modified" for 人 in 優しい人 */
+  context?: string;
 }
 
 async function check<T>(res: Response): Promise<T> {
@@ -105,8 +107,8 @@ export async function putOverride(o: Override): Promise<void> {
   );
 }
 
-export async function deleteOverride(lemma: string, reading: string): Promise<void> {
-  const q = new URLSearchParams({ lemma, reading });
+export async function deleteOverride(lemma: string, reading: string, context = ""): Promise<void> {
+  const q = new URLSearchParams({ lemma, reading, context });
   await check(await fetch(`/api/overrides?${q}`, { method: "DELETE" }));
 }
 

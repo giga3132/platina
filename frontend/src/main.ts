@@ -260,7 +260,7 @@ function renderSaved(): void {
   for (const o of shown) {
     const del = btn(d.delete, { quiet: true, danger: true });
     del.addEventListener("click", async () => {
-      await api.deleteOverride(o.lemma, o.reading);
+      await api.deleteOverride(o.lemma, o.reading, o.context);
       await refreshOverrides();
     });
     body.append(el("tr", {}, el("td", { lang: "ja" }, o.lemma), el("td", { lang: "ja" }, o.reading),

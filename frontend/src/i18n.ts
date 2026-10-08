@@ -335,6 +335,10 @@ const en = {
   reasonNoReading: "no reading",
   reasonSplit: "dictionaries split this phrase differently",
   reasonReading: "dictionaries disagree on the reading",
+  reasonUse: (word: string, use: string) =>
+    `NHK accent for ${word} ${({ modified: "after a modifier (優しい人)", unmodified: "without a modifier",
+      noun: "as a noun", adverb: "used as an adverb" } as Record<string, string>)[use] ?? use}`,
+  reasonForm: (word: string) => `this form of ${word} as NHK lists it`,
   reasonDisagree: (u: string, o: string) => `dictionaries disagree: UniDic ${u}, OpenJTalk ${o}`,
 
   // tutor voice
@@ -664,6 +668,10 @@ const ja: Dict = {
   reasonNoReading: "読みが不明",
   reasonSplit: "辞書によってフレーズの区切り方が違う",
   reasonReading: "辞書によって読みが違う",
+  reasonUse: (word: string, use: string) =>
+    `${({ modified: "修飾語を伴う", unmodified: "修飾語を伴わない", noun: "名詞としての",
+      adverb: "副詞としての" } as Record<string, string>)[use] ?? use}${word}のNHKアクセント`,
+  reasonForm: (word: string) => `NHKに載っている${word}の活用形`,
   reasonDisagree: (u: string, o: string) => `辞書間で不一致：UniDic ${u}、OpenJTalk ${o}`,
 
   tutorUnavailable: (m: string) => `お手本の音声を利用できません：${m}`,
@@ -731,6 +739,8 @@ export function reason(r: string): string {
   const d = tr();
   let m: RegExpMatchArray | null;
   if ((m = r.match(/^no accent data for (.+)$/))) return d.reasonNoData(m[1]);
+  if ((m = r.match(/^NHK (modified|unmodified|noun|adverb) use of (.+)$/))) return d.reasonUse(m[2], m[1]);
+  if ((m = r.match(/^NHK form of (.+)$/))) return d.reasonForm(m[1]);
   if ((m = r.match(/^dictionaries disagree: UniDic (.+), OpenJTalk (.+)$/))) return d.reasonDisagree(m[1], m[2]);
   const fixed: Record<string, string> = {
     "unknown accent rule": d.reasonUnknownRule,

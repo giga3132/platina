@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .kana import special_moras
+from .kana import special_moras, vowel_of
 from .sources import Morph
 
 # Rule corrections, each backed by an NHK-checked gold sentence.
@@ -148,6 +148,32 @@ def _get_rule(con: str, prev_pos: str) -> tuple[str, list[int]]:
     return "*", []
 
 
+# Contracted ている / ておく / てしまう / ていく (来て(る)ない, 見とく, 食べちゃう).
+# UniDic tags them 助動詞, OpenJTalk 動詞-非自立.
+_TE_CONTRACTIONS = {"てる", "でる", "とく", "どく", "ちゃう", "じゃう", "てく", "でく"}
+
+
+def _is_te_contraction(node: Morph) -> bool:
+    return node.lemma in _TE_CONTRACTIONS and (
+        node.pos == "助動詞" or (node.pos == "動詞" and node.pos_group1 == "非自立"))
+
+
+def _te_tail(node: Morph) -> bool:
+    """What can follow a te-form inside its phrase without a drop of its own."""
+    return (node.is_function_word or _is_te_contraction(node)
+            or (node.pos == "形容詞" and node.pos_group1 == "非自立"))
+
+
+def _is_te(prev: Morph, node: Morph) -> bool:
+    """node is a te-form ending: て/で after a verb, or a contracted te-auxiliary."""
+    if _is_te_contraction(node):
+        return True
+    if node.pos == "助動詞" and node.surface == "で" and prev.pos == "動詞":
+        return True  # OpenJTalk tags the で of 読んで as だ
+    return (node.pos == "助詞" and node.pos_group1 == "接続助詞" and node.surface in ("て", "で")
+            and prev.pos in ("動詞", "助動詞"))
+
+
 @dataclass
 class PhraseAccent:
     accent: int
@@ -167,8 +193,23 @@ def combine(phrase: list[Morph], base: list[int | None]) -> PhraseAccent:
         starts.add(pos)
         pos += len(m.moras)
     special = special_moras([mo for m in phrase for mo in m.moras], starts)
+    te_locked = False
     for i in range(1, len(phrase)):
         node, prev = phrase[i], phrase[i - 1]
+        if _te_tail(node) and (te_locked or (top != 0 and _is_te(prev, node))):
+            # Not in UniDic/OpenJTalk: a te-form that already has its drop keeps
+            # it through what follows (キ＼テナイ, ヨ＼ンデナイ, ミ＼トク, タ＼ベテマセン).
+            # The contracted て is tagged 助動詞, so ない/ます/とく's "動詞%F3/F4"
+            # rules would otherwise match it and move the drop onto て; て + ない
+            # parsed as 補助形容詞 gets C3, which does the same.
+            te_locked = True
+            n1 += len(node.moras)
+            continue
+        if top != 0 and _after_adjective_ku(prev, node):
+            # an accented adjective keeps its drop before ない/なる:
+            # タカ＼クナイ (not UniDic's C3 タカク＼ナイ), タカ＼クナル
+            n1 += len(node.moras)
+            continue
         m2 = base[i]
         if m2 is None:
             if not node.is_function_word:
@@ -199,7 +240,11 @@ def combine(phrase: list[Morph], base: list[int | None]) -> PhraseAccent:
                 if top != 0:
                     top = n1 + a
             case "F4":
-                top = n1 + a
+                # た after an adjective (形容詞%F4@-2) gives the かった form its
+                # drop: アカ＼カッタ. An accented adjective already has its own,
+                # which may be the earlier one (タ＼カカッタ), so keep it.
+                if not (prev.pos == "形容詞" and top != 0 and node.ctype in ("助動詞-タ", "特殊・タ")):
+                    top = n1 + a
             case "F5" | "C4" | "P6":
                 top = 0
             case "F6":
@@ -210,7 +255,13 @@ def combine(phrase: list[Morph], base: list[int | None]) -> PhraseAccent:
             case "C2":
                 top = n1 + 1
             case "C3":
-                top = n1
+                if _after_adjective_ku(prev, node):
+                    # 赤い[0] + ない: ない keeps its own drop, アカクナ＼イ
+                    # (UniDic's C3 gives the newer アカク＼ナイ, added in
+                    # phrase_accents as an alternative)
+                    top = n1 + m2
+                else:
+                    top = n1
             case "P1":
                 top = 0 if flat_or_last else n1 + m2
             case "P2":
@@ -245,12 +296,44 @@ def base_accents(m: Morph, accents: list[int]) -> tuple[list[int | None], bool]:
     if not accents:
         return [None], True
     out, known = [], True
+    if accents[0] == 0 and _is_adjective_ku_form(m):
+        # NHK conjugates an adjective listed flat first (甘い アマイ━, アマ＼イ)
+        # as flat only: アマク━, アマ＼クテ, アマ＼カッタ
+        accents = [0]
     for a in accents:
         acc, ok = apply_mod_type(a, m.mod_type, len(m.moras))
         known &= ok
-        if acc not in out:
-            out.append(acc)
+        for x in (acc, _adjective_shift(m, acc) if a else None):
+            if x is not None and x not in out:
+                out.append(x)
     return out, known
+
+
+def _adjective_shift(m: Morph, acc: int) -> int | None:
+    """Not in UniDic/OpenJTalk: an accented adjective's く/かった/ければ forms
+    also take the drop one mora earlier, and NHK lists both (タカ＼ク and
+    タ＼カク, タカ＼カッタ and タ＼カカッタ). A drop that would land on a
+    long vowel's second half moves back once more (チ＼ーサク, オ＼ーキク);
+    none lands on ッ/ン (NHK has only スッパ＼ク). Only for adjectives accented
+    in the dictionary: 赤い[0]'s アカ＼カッタ has no second form."""
+    if not (_is_adjective_ku_form(m) and acc >= 2):
+        return None
+    shifted = acc - 1
+    mora = m.moras[shifted - 1]
+    if mora in ("ッ", "ン"):
+        return None
+    if shifted >= 2 and (mora == "ー" or (vowel_of(m.moras[shifted - 2]), mora) in _LONG_VOWELS):
+        # a diphthong's イ can carry it (オイ＼シク), a long vowel's tail can't
+        shifted -= 1
+    return shifted if shifted >= 1 else None
+
+
+def _is_adjective_ku_form(m: Morph) -> bool:
+    """高く, 高かっ(た), 高けれ(ば)."""
+    return m.pos == "形容詞" and m.pos_group1 == "自立" and m.cform.startswith(("連用形", "仮定形"))
+
+
+_LONG_VOWELS = {("a", "ア"), ("i", "イ"), ("u", "ウ"), ("e", "エ"), ("e", "イ"), ("o", "オ"), ("o", "ウ")}
 
 
 def phrase_accents(phrase: list[Morph], lexeme_accents: list[list[int]]) -> tuple[list[int], bool]:
@@ -274,4 +357,32 @@ def phrase_accents(phrase: list[Morph], lexeme_accents: list[list[int]]) -> tupl
         known &= r.known
         if r.accent not in results:
             results.append(r.accent)
+    n = 0
+    for i, m in enumerate(phrase[:-1]):
+        n += len(m.moras)
+        nxt = phrase[i + 1]
+        if (_after_adjective_ku(m, nxt) and nxt.pos == "形容詞" and 0 in options[i]
+                and n not in results):
+            # flat adjective + ない also falls before ない: アカク＼ナイ
+            results.append(n)
+    if 0 in results and _ends_in_te_mo(phrase):
+        # Not in UniDic/OpenJTalk: after a heiban verb, ～ても is flat
+        # (イワレテモ) or, as most say it now, falls after て (イワレテ＼モ).
+        drop = sum(len(m.moras) for m in phrase) - 1
+        if drop not in results:
+            results.append(drop)
     return results, known
+
+
+def _after_adjective_ku(prev: Morph, node: Morph) -> bool:
+    """ない / なる right after an adjective's く form (高くない, 高くなる)."""
+    return (prev.pos == "形容詞" and prev.pos_group1 == "自立" and prev.cform.startswith("連用形")
+            and node.pos in ("形容詞", "動詞") and node.pos_group1 == "非自立")
+
+
+def _ends_in_te_mo(phrase: list[Morph]) -> bool:
+    if len(phrase) < 3:
+        return False
+    verb, te, mo = phrase[-3:]
+    return (mo.pos == "助詞" and mo.surface == "も" and te.pos_group1 == "接続助詞"
+            and te.surface in ("て", "で") and verb.pos in ("動詞", "助動詞"))

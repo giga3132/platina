@@ -50,6 +50,21 @@
 - {text: 書かない。, expected: カカ＼ナイ, verified: false}
 - {text: 食べなかった。, expected: タベ＼ナカッタ, verified: false}
 
+# te-forms: ても, and contracted ている/ておく after an accented verb
+- {text: 言われても。, expected: イワレテモ━, verified: false, note: イワレテ＼モ (newer, more common) is accepted too}
+- {text: 来てない。, expected: キ＼テナイ, verified: false, note: from 持ってきてない; was キテ＼ナイ}
+- {text: 読んでない。, expected: ヨ＼ンデナイ, verified: false}
+- {text: 食べてません。, expected: タ＼ベテマセン, verified: false}
+- {text: 見とく。, expected: ミ＼トク, verified: false}
+- {text: 遊んでない。, expected: アソンデナイ━, verified: false}
+- {text: 遊んでません。, expected: アソンデマセ＼ン, verified: false}
+
+# adjectives: く/かった forms and ない
+- {text: 高かった。, expected: タカ＼カッタ, verified: true, note: NHK also タ＼カカッタ (accepted)}
+- {text: 甘くて。, expected: アマ＼クテ, verified: true, note: listed flat first, so conjugated as flat}
+- {text: 高くない。, expected: タカ＼クナイ, verified: false, note: タ＼カクナイ accepted; was タカク＼ナイ}
+- {text: 赤くない。, expected: アカクナ＼イ, verified: false, note: アカク＼ナイ accepted (newer)}
+
 # modifiers
 - {text: 大きい犬。, expected: オオキ＼イ イヌ＼, verified: false}
 - {text: 静かな部屋。, expected: シ＼ズカナ ヘヤ＼, verified: false}

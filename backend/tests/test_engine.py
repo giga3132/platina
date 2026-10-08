@@ -102,3 +102,107 @@ def test_approved_native_variant_is_accepted(tmp_path):
     store.set_status(key, 1, "approved")
     p = analyze_text("音を聞いた。", variants=store)[1]
     assert p.native_variants == [1] and 1 in p.alternatives and p.accent == 0
+
+
+def test_te_mo_after_heiban_verb_also_falls_after_te():
+    # イワレテモ and the newer イワレテ＼モ are both standard
+    assert analyze_text("言われても。")[0].alternatives == [0, 4]
+    assert analyze_text("遊んでも。")[0].alternatives == [0, 4]
+    assert analyze_text("書いても。")[0].alternatives == [1]
+
+
+def test_accented_te_form_keeps_its_drop():
+    assert notation(analyze_text("持ってきてない。")) == "モ＼ッテ キ＼テナイ"
+    assert notation(analyze_text("書いてない。")) == "カ＼イテナイ"
+    assert notation(analyze_text("遊んでない。")) == "アソンデナイ━"
+
+
+def _deck_store():
+    # rows as tools/import_anki.py stores the NHK cards for 人 and 昨日
+    store = OverrideStore(":memory:")
+    store.put("人", "ひと", [0])
+    store.put("人", "ひと", [2], context="modified")
+    store.put("昨日", "きのう", [2, 0])
+    store.put("昨日", "きのう", [2], context="noun")
+    store.put("昨日", "きのう", [0], context="adverb")
+    return store
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("人を呼ぶ。", "ヒトオ━ ヨブ━"),
+    ("優しい人に会った。", "ヤサシイ━ ヒト＼ニ ア＼ッタ"),
+    ("話題の人が来た。", "ワダイノ━ ヒト＼ガ キ＼タ"),
+    ("あの人が来た。", "アノ━ ヒト＼ガ キ＼タ"),
+    ("昨日まで留守にしていた。", "キノ＼ウマデ ル＼スニ シテ━ イタ━"),
+    ("昨日渋谷で会った。", "キノウ━ シブヤデ━ ア＼ッタ"),
+    ("昨日、会った。", "キノウ━ ア＼ッタ"),
+])
+def test_override_for_one_use(text, expected):
+    assert notation(analyze_text(text, _deck_store())) == expected
+
+
+def test_override_for_one_use_is_explained_and_exclusive():
+    p = analyze_text("優しい人に会った。", _deck_store())[1]
+    assert p.alternatives == [2]
+    assert p.reasons == ["NHK modified use of 人"]
+    assert p.confidence == "nhk"
+
+
+def test_override_store_migrates_and_deletes_per_use(tmp_path):
+    import sqlite3
+    path = tmp_path / "o.sqlite"
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE overrides (lemma TEXT NOT NULL, reading TEXT NOT NULL, accents TEXT NOT NULL,"
+               " note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL, PRIMARY KEY (lemma, reading))")
+    db.execute("INSERT INTO overrides VALUES ('人', 'ヒト', '[0, 2]', '', 0)")
+    db.commit()
+    db.close()
+    store = OverrideStore(path)
+    assert store.all()[0]["context"] == ""
+    store.put("人", "ひと", [2], context="modified")
+    assert len(store.all()) == 2
+    store.delete("人", "ひと", "modified")
+    assert [o["accents"] for o in store.all()] == [[0, 2]]
+    with pytest.raises(ValueError):
+        store.put("人", "ひと", [2], context="sometimes")
+
+
+@pytest.mark.parametrize("text, alternatives", [
+    ("高く", [2, 1]),        # タカ＼ク, タ＼カク (NHK lists both)
+    ("高かった", [2, 1]),
+    ("小さく", [3, 1]),      # チ＼ーサク: not on the long vowel's tail
+    ("酸っぱく", [3]),       # never on ッ
+    ("赤かった", [2]),       # a flat adjective has one かった form
+    ("高くない。", [2, 1]),  # not UniDic's タカク＼ナイ
+    ("赤くない。", [4, 3]),  # アカクナ＼イ, newer アカク＼ナイ
+    ("高くなる。", [2, 1]),
+])
+def test_adjective_forms(text, alternatives):
+    assert analyze_text(text)[0].alternatives == alternatives
+
+
+def test_adjective_listed_flat_first_conjugates_as_flat():
+    store = OverrideStore(":memory:")
+    store.put("甘い", "あまい", [0, 2])
+    assert analyze_text("甘くて", store)[0].alternatives == [2]
+    assert analyze_text("甘く", store)[0].alternatives == [0]
+
+
+def test_nhk_forms_win_over_the_rules():
+    store = OverrideStore(":memory:")
+    store.put("難しい", "むずかしい", [0, 4])
+    store.put_form("難しい", "むずかしい", "ムズカシカッタ", [4, 3])
+    store.put_form("高い", "たかい", "タカク", [1, 2])
+    store.put_form("駅", "えき", "エキオ", [1])
+    assert analyze_text("難しかった。", store)[0].alternatives == [4, 3]
+    assert analyze_text("高く", store)[0].alternatives == [1, 2]
+    # a longer phrase starting with a form that has its drop keeps it
+    assert analyze_text("高くない。", store)[0].alternatives == [1, 2]
+    p = analyze_text("駅を探す。", store)[0]
+    assert (p.alternatives, p.reasons) == ([1], ["NHK form of 駅"])
+
+
+def test_flat_nhk_form_does_not_decide_a_longer_phrase():
+    store = OverrideStore(":memory:")
+    store.put_form("赤い", "あかい", "アカク", [0])
+    assert analyze_text("赤くない。", store)[0].alternatives == [4, 3]

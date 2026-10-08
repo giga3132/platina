@@ -73,6 +73,8 @@ class OverrideIn(BaseModel):
     reading: str = Field(description="reading in kana, e.g. きく")
     accents: list[int] = Field(description="NHK accent numbers, preferred first, e.g. [0]")
     note: str = ""
+    context: str = Field("", description="use this accent applies to: '' (any), modified, "
+                                         "unmodified, noun or adverb")
 
 
 @app.post("/expected")
@@ -110,13 +112,16 @@ def list_overrides():
 
 @app.put("/overrides")
 def put_override(body: OverrideIn):
-    overrides.put(body.lemma, body.reading, body.accents, body.note)
+    try:
+        overrides.put(body.lemma, body.reading, body.accents, body.note, body.context)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
     return {"ok": True}
 
 
 @app.delete("/overrides")
-def delete_override(lemma: str, reading: str):
-    overrides.delete(lemma, reading)
+def delete_override(lemma: str, reading: str, context: str | None = None):
+    overrides.delete(lemma, reading, context)
     return {"ok": True}
 
 
@@ -345,6 +350,7 @@ def analysis_version() -> str:
         st = learned.MODEL.stat()
         h.update(f"{st.st_size}:{st.st_mtime_ns}".encode())
     h.update(json.dumps(overrides.all(), sort_keys=True, ensure_ascii=False).encode())
+    h.update(json.dumps(overrides.all_forms(), sort_keys=True, ensure_ascii=False).encode())
     h.update(json.dumps(sorted((v["key"], v["accent"], v["status"]) for v in variants.all()),
                         ensure_ascii=False).encode())
     return h.hexdigest()[:12]

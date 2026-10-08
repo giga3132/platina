@@ -130,6 +130,13 @@ ignored by git). There are two ways to add them:
   `cd backend && ../.venv/bin/python -m tools.import_anki deck.txt`. Re-run it after adding cards.
   Accents entered in the app are kept. `--check` lists compounds (美術館, 冷蔵庫) where the rules
   disagree with your cards.
+  Cards for one use of a word are kept apart and applied only to that use. One kind says it's
+  modified, like `ひと【人】（「優しい〜に」など修飾語を伴って）`: then 優しい人に gets ヒト＼ニ and
+  人を呼ぶ stays ヒトオ━. The other kind marks part of speech, like `きのう［名詞］` / `きのう［副詞］`:
+  then 昨日まで gets キノ＼ーマデ and 昨日会った gets キノー━.
+  Extra lines on a card that spell a form of the word are used as written, in the card's order.
+  Examples are conjugations (高い: `タ＼カク`, `タカ＼カッタ`; 学ぶ: `マナビマ＼ス`) and particle forms
+  (駅: `エ＼キオ`). Words without such lines fall back to the rules.
 
 For development: **Type** tab → *Save as NHK-checked test case* adds a sentence to
 `backend/tests/gold/sentences.yaml`. Entries marked `verified: false` still need checking against NHK.
